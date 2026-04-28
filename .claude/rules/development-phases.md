@@ -4,12 +4,25 @@
 
 | Phase | Nội dung | Thời gian | Trạng thái |
 |---|---|---|---|
-| 0 | Cài đặt môi trường | 1–2 ngày | ⬜ Chưa bắt đầu |
+| 0 | Cài đặt môi trường | 1–2 ngày | 🟡 Đang thực hiện |
 | 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ⬜ Chưa bắt đầu |
 | 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ⬜ Chưa bắt đầu |
 | 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | ⬜ Chưa bắt đầu |
 | 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
+
+## Tiến độ Phase 0
+
+| Bước | Nội dung | Trạng thái |
+|---|---|---|
+| 0a | Cài WSL2 trên Windows 11 | ✅ Xong |
+| 0b | Cài Ubuntu 22.04.5 LTS qua MS Store | ✅ Xong |
+| 0c-1 | Thêm ROS 2 apt repository | ✅ Xong |
+| 0c-2 | Cài ROS 2 Humble Desktop | ✅ Xong |
+| 0c-3 | Auto-source `~/.bashrc` | ✅ Xong |
+| 0c-4 | Cài Gazebo + Nav2 + tools | ⬜ Đang chờ |
+| 0d | Cài Python AI tools | ⬜ Đang chờ |
+| 0e | Verify Turtlebot3 simulation | ⬜ Đang chờ |
 
 ---
 
@@ -38,37 +51,52 @@ wsl --install -d Ubuntu-22.04
 
 ### Bước 0c — Cài ROS 2 + Tools (chạy trong WSL2 Ubuntu terminal)
 
-```bash
-# Thêm ROS 2 apt repo
-sudo apt update && sudo apt install -y curl gnupg lsb-release
-sudo curl -sSL https://raw.githubusercontent.com/ros/rosdistro/master/ros.key \
-  -o /usr/share/keyrings/ros-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-  http://packages.ros.org/ros2/ubuntu $(. /etc/os-release && echo $UBUNTU_CODENAME) main" \
-  | sudo tee /etc/apt/sources.list.d/ros2.list > /dev/null
+> ⚠️ **Quan trọng:** URL `ros.key` (binary) đã bị 404 từ 2024. Phải dùng `ros.asc` (ASCII armored)
+> + `wget` + `gpg --dearmor`. KHÔNG dùng `curl ros.key` như tutorial cũ.
 
-# Cài ROS 2 Humble Desktop
+```bash
+# 1. Cài prerequisites
+sudo apt update && sudo apt install -y wget gnupg2 software-properties-common
+
+# 2. Thêm ROS 2 GPG key (PHẢI dùng ros.asc, không phải ros.key)
+wget -qO- https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg
+
+# 3. Thêm repository vào sources list
+echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
+  http://packages.ros.org/ros2/ubuntu jammy main" \
+  | sudo tee /etc/apt/sources.list.d/ros2.list
+
+# 4. Verify repository đã thêm thành công
+cat /etc/apt/sources.list.d/ros2.list   # phải thấy dòng "deb [arch=amd64..."
+
+# 5. Cài ROS 2 Humble Desktop (~5-15 phút)
 sudo apt update && sudo apt install -y ros-humble-desktop
 
-# Cài Gazebo Harmonic + ROS bridge
+# 6. Cài Gazebo Harmonic + ROS bridge
 sudo apt install -y ros-humble-ros-gz
 
-# Cài Nav2 + localization
+# 7. Cài Nav2 + localization
 sudo apt install -y ros-humble-navigation2 ros-humble-nav2-bringup
 sudo apt install -y ros-humble-robot-localization
 sudo apt install -y ros-humble-joint-state-publisher-gui
 sudo apt install -y ros-humble-xacro ros-humble-teleop-twist-keyboard
 
-# Python AI tools
+# 8. Python AI tools
 pip3 install ultralytics opencv-python torch torchvision numpy
 
-# Thêm vào ~/.bashrc để tự source mỗi lần mở terminal
+# 9. Thêm vào ~/.bashrc để tự source mỗi lần mở terminal
 echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
 source ~/.bashrc
+```
 
-# Verify
-ros2 --version   # phải thấy "ros2 humble"
-gz sim --version # phải thấy Gazebo Harmonic
+**Verify (LƯU Ý: `ros2 --version` KHÔNG hoạt động — không có flag này):**
+
+```bash
+echo $ROS_DISTRO              # → humble
+ros2 pkg list | head -5       # → liệt kê 5 packages đầu tiên
+ros2 doctor --report | head   # → bảng platform info
+gz sim --version              # → Gazebo Harmonic version
 ```
 
 ### Bước 0d — Đặt project files trong WSL2

@@ -171,6 +171,14 @@ gz model --spawn-file=person.sdf --model-name=person1 -x 3 -y 0 -z 0
 | `ros2: command not found` sau khi mở terminal mới | Chưa source setup | Thêm `source /opt/ros/humble/setup.bash` vào `~/.bashrc` |
 | Gazebo mở nhưng rất lag | Không dùng GPU acceleration | Cài driver GPU WSL2, kiểm tra `glxinfo | grep renderer` |
 
+### ROS 2 Setup Errors (Common)
+
+| Lỗi | Nguyên nhân | Fix |
+|---|---|---|
+| `curl ros.key → 404 Not Found` | URL `ros.key` đã bị xóa từ 2024 | Dùng `wget -qO- .../ros.asc \| sudo gpg --dearmor -o ...` |
+| `E: Unable to locate package ros-humble-desktop` | Repository chưa thêm vào sources | Verify với `cat /etc/apt/sources.list.d/ros2.list`, sau đó `sudo apt update` |
+| `ros2: error: unrecognized arguments: --version` | ROS 2 không có flag `--version` | Dùng `echo $ROS_DISTRO` hoặc `ros2 pkg list` để verify |
+
 ### ROS 2 / Gazebo chung
 
 | Lỗi | Nguyên nhân | Fix |
