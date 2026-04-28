@@ -1,0 +1,26 @@
+# Agri Robot — Drive Parameters
+# These values mirror what is hard-coded in agri_robot.urdf.xacro.
+# If you change wheel size or chassis width in the URDF, update here too.
+#
+# Note: Phase 1 uses libgazebo_ros_diff_drive.so (Gazebo plugin), NOT ros2_control.
+# This file serves as the single source of truth for drive geometry.
+
+drive:
+  # Wheel geometry
+  wheel_radius:        0.10    # metres
+  wheel_width:         0.06    # metres
+  wheel_separation:    0.62    # metres — left-to-right centre distance (2 × wheel_dy)
+  wheelbase:           0.50    # metres — front-to-rear centre distance (2 × wheel_dx)
+
+  # Velocity limits
+  max_linear_velocity:  2.0    # m/s
+  max_angular_velocity: 1.5    # rad/s
+
+  # Torque & acceleration limits (Gazebo plugin params)
+  max_wheel_torque:        20.0   # N·m per wheel
+  max_wheel_acceleration:   1.0   # rad/s²
+
+  # Odometry
+  odom_frame:      odom
+  base_frame:      base_link
+  publish_rate:    50          # Hz
