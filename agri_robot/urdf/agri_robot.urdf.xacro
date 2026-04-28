@@ -352,46 +352,33 @@
     </sensor>
   </gazebo>
 
-  <!-- ── RGB-D Camera ──────────────────────────────────────
-       Uses libgazebo_ros_openni_kinect.so for combined RGB+Depth.
-       If this plugin is not installed, build will still succeed
-       but camera topics will not appear.
-       Install check: dpkg -l | grep ros-humble-gazebo-ros-pkgs
+  <!-- ── RGB Camera (Phase 3) ─────────────────────────────
+       libgazebo_ros_camera.so — available in gazebo-ros-pkgs.
+       Depth camera (libgazebo_ros_openni_kinect.so) added Phase 4.
   ────────────────────────────────────────────────────────── -->
   <gazebo reference="camera_link">
-    <sensor type="depth" name="rgbd_camera">
+    <sensor type="camera" name="rgb_camera">
+      <always_on>true</always_on>
       <update_rate>15</update_rate>
       <camera>
         <horizontal_fov>1.0472</horizontal_fov>
         <image>
           <width>640</width>
           <height>480</height>
-          <format>B8G8R8</format>
+          <format>R8G8B8</format>
         </image>
         <clip>
           <near>0.05</near>
-          <far>10.0</far>
+          <far>20.0</far>
         </clip>
       </camera>
-      <plugin name="rgbd_camera_controller"
-              filename="libgazebo_ros_openni_kinect.so">
-        <baseline>0.2</baseline>
-        <always_on>true</always_on>
-        <update_rate>15.0</update_rate>
+      <plugin name="rgb_camera_controller" filename="libgazebo_ros_camera.so">
+        <ros>
+          <remapping>image_raw:=/camera/image_raw</remapping>
+          <remapping>camera_info:=/camera/camera_info</remapping>
+        </ros>
         <camera_name>camera</camera_name>
-        <image_topic_name>/camera/image_raw</image_topic_name>
-        <camera_info_topic_name>/camera/camera_info</camera_info_topic_name>
-        <depth_image_topic_name>/camera/depth/image_raw</depth_image_topic_name>
-        <depth_image_camera_info_topic_name>/camera/depth/camera_info</depth_image_camera_info_topic_name>
-        <point_cloud_topic_name>/camera/depth/points</point_cloud_topic_name>
         <frame_name>camera_optical_link</frame_name>
-        <point_cloud_cutoff>0.05</point_cloud_cutoff>
-        <point_cloud_cutoff_max>10.0</point_cloud_cutoff_max>
-        <distortion_k1>0</distortion_k1>
-        <distortion_k2>0</distortion_k2>
-        <distortion_k3>0</distortion_k3>
-        <distortion_t1>0</distortion_t1>
-        <distortion_t2>0</distortion_t2>
       </plugin>
     </sensor>
   </gazebo>
