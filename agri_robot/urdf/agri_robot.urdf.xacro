@@ -269,30 +269,46 @@
   <!-- ===================================================== -->
 
   <!-- ── 4WD Skid-Steer Drive ─────────────────────────────
-       libgazebo_ros_diff_drive.so supports multiple joints:
-       left side  = front_left  + rear_left  (same velocity)
-       right side = front_right + rear_right (same velocity)
-       This gives classic skid-steer / tank-style steering.
+       Two diff_drive instances share /cmd_vel so all 4 wheels
+       are independently powered (true 4WD).
+       Front plugin: publishes /odom and odom TF.
+       Rear  plugin: drives rear wheels only (no duplicate odom).
   ────────────────────────────────────────────────────────── -->
+
+  <!-- Front axle (publishes odom + TF) -->
   <gazebo>
-    <plugin name="agri_robot_drive" filename="libgazebo_ros_diff_drive.so">
+    <plugin name="drive_front" filename="libgazebo_ros_diff_drive.so">
       <ros/>
-
       <update_rate>30</update_rate>
-
-      <!-- Phase 1: single joint per side (rear wheels spin freely) -->
       <left_joint>front_left_wheel_joint</left_joint>
       <right_joint>front_right_wheel_joint</right_joint>
-
       <wheel_separation>0.62</wheel_separation>
       <wheel_diameter>0.20</wheel_diameter>
-
       <max_wheel_torque>20</max_wheel_torque>
       <max_wheel_acceleration>1.0</max_wheel_acceleration>
-
       <command_topic>cmd_vel</command_topic>
       <publish_odom>true</publish_odom>
       <publish_odom_tf>true</publish_odom_tf>
+      <publish_wheel_tf>false</publish_wheel_tf>
+      <odometry_frame>odom</odometry_frame>
+      <robot_base_frame>base_footprint</robot_base_frame>
+    </plugin>
+  </gazebo>
+
+  <!-- Rear axle (same cmd_vel, no duplicate odom) -->
+  <gazebo>
+    <plugin name="drive_rear" filename="libgazebo_ros_diff_drive.so">
+      <ros/>
+      <update_rate>30</update_rate>
+      <left_joint>rear_left_wheel_joint</left_joint>
+      <right_joint>rear_right_wheel_joint</right_joint>
+      <wheel_separation>0.62</wheel_separation>
+      <wheel_diameter>0.20</wheel_diameter>
+      <max_wheel_torque>20</max_wheel_torque>
+      <max_wheel_acceleration>1.0</max_wheel_acceleration>
+      <command_topic>cmd_vel</command_topic>
+      <publish_odom>false</publish_odom>
+      <publish_odom_tf>false</publish_odom_tf>
       <publish_wheel_tf>false</publish_wheel_tf>
       <odometry_frame>odom</odometry_frame>
       <robot_base_frame>base_footprint</robot_base_frame>
