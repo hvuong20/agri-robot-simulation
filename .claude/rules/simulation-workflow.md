@@ -155,8 +155,9 @@ ros2 node info /yolo_detector_node
 ros2 param list /ekf_filter_node
 ros2 param get /ekf_filter_node frequency
 
-# Gazebo: spawn model người để test
-gz model --spawn-file=person.sdf --model-name=person1 -x 3 -y 0 -z 0
+# Gazebo Classic: spawn model người để test (dùng rosservice, không phải gz CLI)
+ros2 service call /spawn_entity gazebo_msgs/srv/SpawnEntity \
+  '{name: "person1", xml: "$(cat person.sdf)", initial_pose: {position: {x: 3, y: 0, z: 0}}}'
 ```
 
 ## Common Errors & Fixes
@@ -178,6 +179,11 @@ gz model --spawn-file=person.sdf --model-name=person1 -x 3 -y 0 -z 0
 | `curl ros.key → 404 Not Found` | URL `ros.key` đã bị xóa từ 2024 | Dùng `wget -qO- .../ros.asc \| sudo gpg --dearmor -o ...` |
 | `E: Unable to locate package ros-humble-desktop` | Repository chưa thêm vào sources | Verify với `cat /etc/apt/sources.list.d/ros2.list`, sau đó `sudo apt update` |
 | `ros2: error: unrecognized arguments: --version` | ROS 2 không có flag `--version` | Dùng `echo $ROS_DISTRO` hoặc `ros2 pkg list` để verify |
+| `gz sim --version → invalid argument` | Máy cài Gazebo Classic 11, không phải Harmonic | Dùng `gazebo --version`. Classic dùng `gazebo` command, không phải `gz sim` |
+| `Package 'turtlebot3_gazebo' not found` | Package chưa được cài | `sudo apt install -y ros-humble-turtlebot3-gazebo` |
+| Robot spawn nhưng không di chuyển khi bấm teleop | Terminal teleop chưa có focus | Click trực tiếp vào terminal đang chạy teleop, rồi mới bấm phím |
+| Robot không spawn (topic `/odom` không xuất hiện) | `TURTLEBOT3_MODEL` chưa được set | `export TURTLEBOT3_MODEL=burger` rồi restart launch |
+| Robot không di chuyển dù teleop đang gửi | Gazebo đang bị Pause | Nhấn nút ▶ Play ở thanh dưới cửa sổ Gazebo |
 
 ### ROS 2 / Gazebo chung
 

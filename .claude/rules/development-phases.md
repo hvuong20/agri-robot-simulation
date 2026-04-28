@@ -4,25 +4,25 @@
 
 | Phase | Nội dung | Thời gian | Trạng thái |
 |---|---|---|---|
-| 0 | Cài đặt môi trường | 1–2 ngày | 🟡 Đang thực hiện |
+| 0 | Cài đặt môi trường | 1–2 ngày | ✅ Hoàn thành |
 | 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ⬜ Chưa bắt đầu |
 | 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ⬜ Chưa bắt đầu |
 | 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | ⬜ Chưa bắt đầu |
 | 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
 
-## Tiến độ Phase 0
+## Tiến độ Phase 0 ✅
 
 | Bước | Nội dung | Trạng thái |
 |---|---|---|
-| 0a | Cài WSL2 trên Windows 11 | ✅ Xong |
+| 0a | Cài WSL2 trên Windows 11 (build 26200) | ✅ Xong |
 | 0b | Cài Ubuntu 22.04.5 LTS qua MS Store | ✅ Xong |
-| 0c-1 | Thêm ROS 2 apt repository | ✅ Xong |
+| 0c-1 | Thêm ROS 2 apt repository (`ros.asc`) | ✅ Xong |
 | 0c-2 | Cài ROS 2 Humble Desktop | ✅ Xong |
 | 0c-3 | Auto-source `~/.bashrc` | ✅ Xong |
-| 0c-4 | Cài Gazebo + Nav2 + tools | ⬜ Đang chờ |
-| 0d | Cài Python AI tools | ⬜ Đang chờ |
-| 0e | Verify Turtlebot3 simulation | ⬜ Đang chờ |
+| 0c-4 | Cài Gazebo Classic 11 + Nav2 + tools | ✅ Xong |
+| 0d | Cài Python AI tools (YOLOv8, torch) | ✅ Xong |
+| 0e | Verify Turtlebot3 simulation | ✅ Xong — robot di chuyển được bằng teleop |
 
 ---
 
@@ -114,21 +114,50 @@ cd ~/agri_robot_ws/src
 > **Lưu ý quan trọng:** Đặt code trong `~/` (WSL2 filesystem) thay vì `/mnt/c/` (Windows drive).
 > Truy cập `/mnt/c/` có I/O chậm hơn 10-20x so với filesystem nội bộ của WSL2.
 
-### Bước 0e — Chạy thử Turtlebot3 (kiểm tra toàn bộ pipeline)
+### Bước 0e — Chạy thử Turtlebot3 (kiểm tra toàn bộ pipeline) ✅
 
 ```bash
+# Cài Turtlebot3 packages (quan trọng: cần cả 2 packages này)
 sudo apt install -y ros-humble-turtlebot3 ros-humble-turtlebot3-gazebo
+
+# Cài Gazebo Classic bridge (dùng libgazebo_ros_pkgs, KHÔNG phải ros-gz)
+sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-ros2-control
+
+# Source Gazebo environment
+echo "source /usr/share/gazebo/setup.sh" >> ~/.bashrc
+
+# QUAN TRỌNG: phải set model trước khi launch
 echo "export TURTLEBOT3_MODEL=burger" >> ~/.bashrc
 source ~/.bashrc
-
-# Mở Gazebo simulation:
-ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
-# → Cửa sổ Gazebo xuất hiện trên Windows ✓
-
-# Mở terminal thứ 2 trong VS Code: chạy Nav2
-ros2 launch turtlebot3_navigation2 navigation2.launch.py
-# → Robot tự di chuyển khi gửi goal từ RViz2 ✓
 ```
+
+**Terminal 1 — Khởi động Gazebo:**
+```bash
+export TURTLEBOT3_MODEL=burger
+ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
+# → Cửa sổ Gazebo xuất hiện trên Windows
+# → Nhìn panel trái, double-click "burger" để camera tìm robot
+```
+
+**Terminal 2 — Điều khiển bàn phím:**
+```bash
+ros2 run teleop_twist_keyboard teleop_twist_keyboard
+# → Click vào terminal này trước khi bấm phím!
+```
+
+**Phím điều khiển Turtlebot3:**
+```
+   i    ← Tiến thẳng
+j  k  l ← Quay trái | Dừng | Quay phải
+   ,    ← Lùi
+q / z   ← Tăng / giảm tốc độ
+```
+
+> ⚠️ **Lưu ý thực tế đã gặp:**
+> - Nếu `echo $TURTLEBOT3_MODEL` trống → robot không spawn đúng, phải `export TURTLEBOT3_MODEL=burger` rồi restart
+> - Gazebo có thể khởi động ở trạng thái **Pause** → nhấn nút ▶ Play ở thanh dưới
+> - Teleop phải **click trực tiếp vào terminal** trước khi bấm phím mới có tác dụng
+> - Robot trong Gazebo rất nhỏ — dùng scroll wheel zoom in để thấy
 
 ---
 

@@ -18,7 +18,7 @@ ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
 | OS (host) | **Windows 11** | Máy tính phát triển |
 | OS (dev) | **WSL2 + Ubuntu 22.04** | Môi trường Linux chạy bên trong Windows |
 | Middleware | **ROS 2 Humble** (LTS đến 2027) | Kết nối tất cả modules |
-| Simulator | **Gazebo Harmonic** | Vật lý, sensor simulation |
+| Simulator | **Gazebo Classic 11** (v11.10.2) | Vật lý, sensor simulation |
 | Navigation | **Nav2** | Path planning, return-to-home |
 | Localization | **robot_localization** (EKF) | Fuse GPS + IMU → vị trí chính xác |
 | AI / Vision | **YOLOv8** (Ultralytics) + **OpenCV** | Object detection từ camera |
@@ -30,6 +30,9 @@ ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
 > **Tại sao WSL2 thay vì ROS 2 native Windows?**
 > ROS 2 có bản native Windows nhưng thiếu nhiều package, Gazebo không chạy tốt.
 > WSL2 cho môi trường Linux đầy đủ bên trong Windows — tất cả tutorial và package đều hoạt động bình thường.
+
+> **Gazebo Classic 11 vs Harmonic:** ROS 2 Humble trên Ubuntu 22.04 cài kèm Gazebo Classic 11 (không phải Harmonic).
+> Dùng lệnh `gazebo` (không phải `gz sim`). Plugins dùng prefix `libgazebo_ros_*`.
 
 ## Sensors (Planned)
 
