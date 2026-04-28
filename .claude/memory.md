@@ -11,16 +11,9 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 | 0 | Cài WSL2 + ROS 2 Humble + Gazebo Classic 11 | ✅ Hoàn thành |
 | 1 | URDF robot 4WD + Gazebo launch + teleop | ✅ Hoàn thành |
 | 2 | Localization: dual EKF + navsat_transform | ✅ Hoàn thành |
-| 3 | Nav2 + Return-to-Home | 🔄 Code xong, cần test end-to-end sau khi restart Gazebo |
+| 3 | Nav2 + Return-to-Home | ✅ Hoàn thành — `Successfully returned home!` |
 | 4 | AI Obstacle Avoidance (YOLOv8) | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | ⬜ Chưa bắt đầu |
-
-### Phase 3 — Việc còn lại
-- Restart Gazebo (đã crash) → Terminal 1
-- Restart localization → Terminal 2
-- Start Nav2 → Terminal 3 (BT XML fix đã áp dụng)
-- Chạy `ros2 run agri_robot return_home` → Terminal 4
-- Verify: `TaskResult.SUCCEEDED`
 
 ---
 
@@ -94,6 +87,17 @@ Lưu home từ `/odometry/global` (không phải `/gps/fix`) — đã ở map fr
 **Root cause 3:** Global EKF circular subscription.
 **Fix:** Rename local EKF output từ `/odometry/filtered` → `/odometry/local`.
 
+### [P3] Zombie Nav2 nodes — velocity_smoother conflict
+Khi Nav2 crash và restart, các node cũ có thể còn trong DDS graph (ghost node).
+Khi launch lại, `velocity_smoother` gặp conflict với ghost node → configure fail ngay lập tức (không log gì).
+**Fix:** `pkill -9 -f 'velocity_smoother|bt_navigator|...'` rồi chờ 5–8 giây cho DDS clear.
+**Verify clean:** `ros2 node list | grep velocity` → không có kết quả.
+
+### [P3] Nav2 background process chết khi shell exit
+Khi dùng `bash -c "nohup ros2 launch ... & echo done"` (shell exit ngay), Nav2 có thể chết.
+**Fix:** Giữ shell sống ít nhất 5 giây: `... & sleep 5 && echo done`.
+Localization dùng `& sleep 12 && tail` nên sống được.
+
 ### [P3] BT node không tìm thấy khi load
 ```
 Could not load library: libnav2_path_expiring_timer_condition_bt_node.so
@@ -116,6 +120,21 @@ bt_navigator:
 ```
 
 **Quan trọng:** bt_navigator load **2 BT XML** khi khởi động (to_pose VÀ through_poses). Phải cung cấp custom XML cho cả 2.
+
+### [P3] `error_code_id` port không tồn tại trong nav2 1.1.20
+```
+Possible typo? ...tried to remap port "error_code_id" in node [ComputePathToPose]...
+```
+`ComputePathToPose`, `ComputePathThroughPoses`, `Spin`, `Wait`, `BackUp` trong build này (nav2 1.1.20-1jammy) **không expose port `error_code_id`**.
+**Fix:** Xóa tất cả `error_code_id="{...}"` khỏi cả 2 BT XML files.
+
+### [P3] `BackUp` action server race condition khi bt_navigator load
+```
+"backup" action server not available after waiting for 1.00s
+```
+bt_navigator load BT XML ngay khi behavior_server vừa activated, trước khi
+behavior_server kịp register action server `backup`.
+**Fix:** Bỏ `BackUp`, `Spin`, `Wait` khỏi `navigate_through_poses_bt.xml` — chỉ dùng `ClearEntireCostmap` (service, không phải action).
 
 ### [P3] `waitUntilNav2Active()` treo vô hạn
 ```
