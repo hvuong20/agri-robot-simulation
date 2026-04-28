@@ -34,44 +34,58 @@ base_link
   └── imu_link              (joint: fixed, center chassis)
 ```
 
-## Thông số Robot (Tham khảo XAG R80)
+## Thông số Robot (Thực tế trong URDF — đã xây dựng)
 
 | Thông số | Giá trị |
 |---|---|
-| Chiều dài chassis | 1.2 m |
-| Chiều rộng chassis | 0.9 m |
-| Chiều cao (không payload) | 0.5 m |
-| Đường kính bánh | 0.35 m |
-| Khối lượng (simulate) | 80 kg |
-| Wheelbase | 0.85 m |
-| Track width | 0.9 m |
-| Tốc độ tối đa | 2.0 m/s |
+| Chiều dài chassis | 0.80 m |
+| Chiều rộng chassis | 0.55 m |
+| Chiều cao chassis | 0.20 m |
+| Đường kính bánh | 0.20 m (bán kính 0.10 m) |
+| Bề rộng bánh | 0.08 m |
+| Khối lượng (simulate) | 20 kg chassis + 2 kg mỗi bánh |
+| Track width (wheel_separation) | 0.62 m |
+| Footprint radius (Nav2) | 0.50 m |
+| Tốc độ tối đa | 1.5 m/s linear, 1.0 rad/s angular |
 
-## 4WD Skid-Steer Configuration
+## 4WD Skid-Steer Configuration (Gazebo Classic)
 
 **Nguyên lý:** Điều khiển tốc độ 2 bên trái/phải khác nhau để quay.
 - Rẽ trái: bánh phải quay nhanh hơn bánh trái
 - Rẽ phải: bánh trái quay nhanh hơn bánh phải
 - Quay tại chỗ: 2 bên quay ngược chiều nhau
 
-**ROS 2 Controller (`controllers.yaml`):**
-```yaml
-controller_manager:
-  ros__parameters:
-    update_rate: 50
+**Triển khai thực tế — 2 plugin diff_drive:**
 
-agri_robot_controller:
-  ros__parameters:
-    type: diff_drive_controller/DiffDriveController
-    left_wheel_names:  ["front_left_wheel_joint",  "rear_left_wheel_joint"]
-    right_wheel_names: ["front_right_wheel_joint", "rear_right_wheel_joint"]
-    wheel_separation: 0.9       # track width (m)
-    wheel_radius:     0.175     # bán kính bánh (m)
-    publish_rate: 50.0
-    cmd_vel_topic: /cmd_vel
-    odom_frame_id: odom
-    base_frame_id: base_link
+Gazebo Classic `libgazebo_ros_diff_drive.so` chỉ điều khiển được 2 bánh (1 trái + 1 phải).
+Để có true 4WD, dùng **2 plugin riêng biệt**:
+
+```xml
+<!-- Plugin 1: Front axle — publish odom và TF -->
+<plugin name="drive_front" filename="libgazebo_ros_diff_drive.so">
+  <left_joint>front_left_wheel_joint</left_joint>
+  <right_joint>front_right_wheel_joint</right_joint>
+  <wheel_separation>0.62</wheel_separation>
+  <wheel_diameter>0.20</wheel_diameter>
+  <command_topic>cmd_vel</command_topic>
+  <publish_odom>true</publish_odom>
+  <publish_odom_tf>true</publish_odom_tf>
+  <robot_base_frame>base_footprint</robot_base_frame>
+</plugin>
+
+<!-- Plugin 2: Rear axle — KHÔNG publish odom (tránh duplicate) -->
+<plugin name="drive_rear" filename="libgazebo_ros_diff_drive.so">
+  <left_joint>rear_left_wheel_joint</left_joint>
+  <right_joint>rear_right_wheel_joint</right_joint>
+  <wheel_separation>0.62</wheel_separation>
+  <wheel_diameter>0.20</wheel_diameter>
+  <command_topic>cmd_vel</command_topic>   <!-- cùng topic với front -->
+  <publish_odom>false</publish_odom>
+  <publish_odom_tf>false</publish_odom_tf>
+</plugin>
 ```
+
+**Kết quả:** Cả 4 bánh đều quay đồng bộ theo `/cmd_vel`. `/odom` chỉ được publish 1 lần (từ front plugin).
 
 ## Sensor Configuration
 

@@ -1,186 +1,207 @@
 # Navigation System
 
-## Tổng quan
+## Sơ đồ tổng quát
 
 ```
 GPS (/gps/fix) ──────────────┐
-                              ├──► robot_localization (EKF) ──► /odometry/global
-IMU (/imu/data) ─────────────┘                                       │
-                                                                      ▼
-Wheel Odom (/odom) ─────────────────────────────────────► Nav2 Costmap & Planner
-                                                                      │
-                                                                      ▼
-                                                          DWB Controller ──► /cmd_vel
+                              ├──► navsat_transform ──► /odometry/gps
+IMU (/imu/data) ─────────────┘         │
+                                       │
+Wheel Odom (/odom)                     │
+   + IMU (/imu/data)                   │
+      └──► local EKF ──► /odometry/local ──────────┐
+                                                    ├──► global EKF ──► /odometry/global
+                               /odometry/gps ───────┘                        │
+                                                                              ▼
+                                                                    Nav2 (odom_topic)
+                                                                              │
+                                                                    DWB Controller ──► /cmd_vel
 ```
 
-## robot_localization (EKF)
+## Localization — Dual EKF Setup
 
-File: `agri_robot/config/ekf.yaml`
+### Local EKF (`ekf_local.yaml`)
+- **Input:** `/odom` (wheel odometry) + `/imu/data`
+- **Output:** `/odometry/local` (odom frame — stable short-term)
+- **Output frame:** `odom`
 
 ```yaml
-ekf_filter_node:
-  ros__parameters:
-    frequency: 30.0
-    sensor_timeout: 0.1
-    two_d_mode: true          # outdoor flat field → 2D mode
-    publish_tf: true
+frequency: 30.0
+two_d_mode: true
+world_frame: odom   # local EKF works in odom frame
 
-    map_frame: map
-    odom_frame: odom
-    base_link_frame: base_link
-    world_frame: odom
+odom0: /odom
+odom0_config: [true, true, false, false, false, true, true, false, false, false, false, true, false, false, false]
 
-    # Fuse wheel odometry
-    odom0: /odom
-    odom0_config: [true,  true,  false,   # x, y, z
-                   false, false, false,   # roll, pitch, yaw
-                   true,  true,  false,   # vx, vy, vz
-                   false, false, true,    # vroll, vpitch, vyaw
-                   false, false, false]   # ax, ay, az
-
-    # Fuse IMU
-    imu0: /imu/data
-    imu0_config: [false, false, false,
-                  true,  true,  true,
-                  false, false, false,
-                  true,  true,  true,
-                  true,  true,  false]
-    imu0_remove_gravitational_acceleration: true
+imu0: /imu/data
+imu0_config: [false, false, false, true, true, true, false, false, false, true, true, true, true, true, false]
+imu0_remove_gravitational_acceleration: true
 ```
 
-## navsat_transform_node
-
-Chuyển GPS lat/lon → ROS x/y trong map frame.
-
-File: `agri_robot/config/navsat.yaml`
+### navsat_transform (`navsat.yaml`)
+- **Input:** `/gps/fix` + `/imu/data` + `/odometry/local`
+- **Output:** `/odometry/gps`
 
 ```yaml
-navsat_transform_node:
-  ros__parameters:
-    frequency: 10.0
-    delay: 3.0                # chờ EKF ổn định
-    magnetic_declination_radians: 0.0
-    yaw_offset: 1.5707963     # camera nhìn về phía trước
-    zero_altitude: true
-    broadcast_utm_transform: false
-    publish_filtered_gps: true
-    use_odometry_yaw: false
-    wait_for_datum: false
-
-    # Topics
-    # Input:  /gps/fix, /imu/data, /odometry/filtered
-    # Output: /odometry/global (GPS-fused position)
+frequency: 10.0
+delay: 1.0                    # giảm từ 3.0 — kết hợp use_odometry_yaw
+magnetic_declination_radians: 0.0
+yaw_offset: 0.0
+zero_altitude: true
+use_odometry_yaw: true        # QUAN TRỌNG: dùng yaw từ odometry, không từ IMU riêng
+                              # Tránh deadlock khi robot đứng yên (không có GPS heading)
+wait_for_datum: false
 ```
 
-## Return-to-Home
+### Global EKF (`ekf_global.yaml`)
+- **Input:** `/odometry/local` + `/odometry/gps`
+- **Output:** `/odometry/global` (map frame — GPS-anchored)
+- **Output frame:** `map`
 
-File: `agri_robot/scripts/navigation/return_home.py`
+```yaml
+world_frame: map    # global EKF works in map frame
 
+odom0: /odometry/local
+odom0_config: [true, true, false, false, false, true, true, false, false, false, false, true, false, false, false]
+
+odom1: /odometry/gps
+odom1_config: [true, true, false, false, false, false, false, false, false, false, false, false, false, false, false]
+```
+
+> **Tại sao `/odometry/local` chứ không phải `/odometry/filtered`?**
+> Nếu đặt tên là `/odometry/filtered`, global EKF (output remapped to `/odometry/global`)
+> vẫn lắng nghe `/odometry/filtered` như input → **circular subscription** — global EKF
+> feed kết quả của mình vào chính nó. Đặt tên khác phá vỡ vòng lặp này.
+
+### localization.launch.py — cấu trúc
 ```python
-import rclpy
-from rclpy.node import Node
-from sensor_msgs.msg import NavSatFix
-from nav2_simple_commander.robot_navigator import BasicNavigator
-from geometry_msgs.msg import PoseStamped
-import math
+Node(ekf_node, name='ekf_filter_node',           # local EKF
+     remappings=[('odometry/filtered', '/odometry/local')]),
 
-class ReturnHomeNode(Node):
-    def __init__(self):
-        super().__init__('return_home_node')
-        self.home_gps = None
-        self.home_saved = False
+Node(navsat_transform_node,
+     remappings=[
+         ('odometry/filtered', '/odometry/local'),  # input
+         ('odometry/gps', '/odometry/gps'),          # output
+     ]),
 
-        # Lưu GPS đầu tiên nhận được làm home position
-        self.gps_sub = self.create_subscription(
-            NavSatFix, '/gps/fix', self._save_home, 10)
+Node(ekf_node, name='ekf_filter_node_map',        # global EKF
+     remappings=[('odometry/filtered', '/odometry/global')]),
+```
+Tất cả nodes đều cần `parameters=[config_file, {'use_sim_time': True}]`.
 
-    def _save_home(self, msg: NavSatFix):
-        if not self.home_saved and msg.status.status >= 0:
-            self.home_gps = (msg.latitude, msg.longitude)
-            self.home_saved = True
-            self.get_logger().info(
-                f'Home saved: lat={msg.latitude:.6f}, lon={msg.longitude:.6f}')
+---
 
-    def go_home(self):
-        if not self.home_saved:
-            self.get_logger().error('Home position not saved yet!')
-            return False
+## Return-to-Home (`agri_robot/agri_robot/navigation/return_home.py`)
 
-        nav = BasicNavigator()
-        nav.waitUntilNav2Active()
+**Logic:**
+1. Subscribe `/odometry/global` — lưu message đầu tiên làm "home pose"
+2. Chờ `navigate_to_pose` action server sẵn sàng (KHÔNG dùng `waitUntilNav2Active()`)
+3. Gửi PoseStamped về home qua `navigator.goToPose()`
+4. In distance remaining mỗi vòng lặp
 
-        # Chuyển GPS home sang PoseStamped (qua /odometry/global)
-        home_pose = self._gps_to_pose(self.home_gps)
-        nav.goToPose(home_pose)
+**Quan trọng — tại sao không dùng `waitUntilNav2Active()`:**
+```python
+# ❌ Sai — gây loop chờ AMCL mãi mãi (GPS setup không có AMCL)
+navigator.waitUntilNav2Active()
 
-        while not nav.isTaskComplete():
-            feedback = nav.getFeedback()
-            dist = feedback.distance_remaining
-            self.get_logger().info(f'Distance to home: {dist:.2f}m')
-
-        result = nav.getResult()
-        self.get_logger().info(f'Return home result: {result}')
-        return True
+# ✅ Đúng — chờ trực tiếp action server
+from rclpy.action import ActionClient
+from nav2_msgs.action import NavigateToPose
+_ac = ActionClient(navigator, NavigateToPose, 'navigate_to_pose')
+while not _ac.wait_for_server(timeout_sec=1.0):
+    navigator.get_logger().info('navigate_to_pose not ready, waiting...')
 ```
 
-## Nav2 Configuration
+**Chạy:**
+```bash
+ros2 run agri_robot return_home
+```
 
-File: `agri_robot/config/nav2_params.yaml`
+---
 
+## Nav2 Configuration (`agri_robot/config/nav2_params.yaml`)
+
+**Design:**
+- Không có `map_server` / `static_layer` (GPS-based, đồng trống)
+- `global_costmap`: rolling 50×50m, `track_unknown_space: false` (unknown = free)
+- `local_costmap`: rolling 10×10m, chỉ có `inflation_layer`
+- `odom_topic: /odometry/global` (GPS-corrected absolute position)
+
+**Key values:**
 ```yaml
 bt_navigator:
-  ros__parameters:
-    global_frame: map
-    robot_base_frame: base_link
-    odom_topic: /odometry/global
-    default_bt_xml_filename: "navigate_w_replanning_and_recovery.xml"
+  default_nav_to_pose_bt_xml: "/home/hvuong20/agri_robot_ws/install/agri_robot/share/agri_robot/config/navigate_to_pose_bt.xml"
+  default_nav_through_poses_bt_xml: "/home/hvuong20/agri_robot_ws/install/agri_robot/share/agri_robot/config/navigate_through_poses_bt.xml"
 
-controller_server:
-  ros__parameters:
-    controller_frequency: 20.0
-    controller_plugins: ["FollowPath"]
-    FollowPath:
-      plugin: "dwb_core::DWBLocalPlanner"
-      min_vel_x: 0.0
-      max_vel_x: 1.5        # tốc độ tối đa (m/s)
-      max_vel_theta: 1.0    # tốc độ quay (rad/s)
-      min_speed_xy: 0.0
-      max_speed_xy: 1.5
-
-planner_server:
-  ros__parameters:
-    planner_plugins: ["GridBased"]
-    GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
+controller_server (DWB):
+  max_vel_x: 1.5 m/s
+  max_vel_theta: 1.0 rad/s
+  xy_goal_tolerance: 0.50 m
 
 global_costmap:
-  global_costmap:
-    ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_link
-      robot_radius: 0.55    # nửa chiều rộng robot (m)
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+  rolling_window: true, 50×50m, resolution 0.10m
+  robot_radius: 0.50m
 
 local_costmap:
-  local_costmap:
-    ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
-      global_frame: odom
-      robot_base_frame: base_link
-      rolling_window: true
-      width: 5              # 5m x 5m local window
-      height: 5
-      resolution: 0.05
-      robot_radius: 0.55
-      plugins: ["obstacle_layer", "inflation_layer"]
+  rolling_window: true, 10×10m, resolution 0.05m
 ```
 
-## Waypoint Navigation
+### Custom BT XML — tại sao cần
+
+nav2_bringup trong Humble **không forward** `default_nav_to_pose_bt_xml` launch argument.
+bt_navigator chỉ đọc từ `configured_params` (params_file). Do đó phải set đường dẫn
+tuyệt đối trực tiếp trong `nav2_params.yaml`.
+
+bt_navigator load **2 BT XML** khi khởi động:
+- `default_nav_to_pose_bt_xml` → cho `NavigateToPose` action
+- `default_nav_through_poses_bt_xml` → cho `NavigateThroughPoses` action
+
+Default XML của Nav2 dùng node `RemovePassedGoals` không có trong build này → phải custom cả 2.
+
+**Custom BT (navigate_to_pose_bt.xml) — chỉ dùng nodes có sẵn:**
+- `RecoveryNode`, `PipelineSequence`, `RateController`
+- `ComputePathToPose`, `FollowPath`
+- `ReactiveFallback`, `GoalUpdated`, `RoundRobin`
+- `ClearEntireCostmap`, `Spin`, `Wait`, `BackUp`
+
+---
+
+## Khởi động stack (thứ tự bắt buộc)
+
+```bash
+# Terminal 1
+ros2 launch agri_robot gazebo.launch.py
+# → Chờ robot xuất hiện trong Gazebo (≈15 giây)
+
+# Terminal 2
+ros2 launch agri_robot localization.launch.py
+# → Chờ: [navsat_transform]: Datum (latitude, longitude...)
+
+# Terminal 3
+ros2 launch agri_robot navigation.launch.py
+# → Chờ: [lifecycle_manager_navigation]: Managed nodes are active
+
+# Terminal 4
+ros2 run agri_robot return_home
+```
+
+## Debug Localization
+
+```bash
+# Kiểm tra /odometry/global có data không
+ros2 topic echo /odometry/global --once
+
+# Kiểm tra TF map→base_link
+ros2 run tf2_ros tf2_echo map base_link
+
+# Kiểm tra TF tree
+ros2 run tf2_tools view_frames
+
+# Xem tất cả topics localization
+ros2 topic list | grep odometry
+```
+
+## Waypoint Navigation (tương lai — Phase 5)
 
 ```python
 from nav2_simple_commander.robot_navigator import BasicNavigator
@@ -189,9 +210,14 @@ import rclpy
 
 rclpy.init()
 nav = BasicNavigator()
-nav.waitUntilNav2Active()
 
-# Tạo danh sách waypoints (trong map frame)
+# Chờ action server (KHÔNG dùng waitUntilNav2Active)
+from rclpy.action import ActionClient
+from nav2_msgs.action import NavigateToPose
+_ac = ActionClient(nav, NavigateToPose, 'navigate_to_pose')
+while not _ac.wait_for_server(timeout_sec=1.0):
+    pass
+
 waypoints = []
 for (x, y) in [(5.0, 0.0), (5.0, 5.0), (0.0, 5.0)]:
     pose = PoseStamped()
@@ -201,21 +227,7 @@ for (x, y) in [(5.0, 0.0), (5.0, 5.0), (0.0, 5.0)]:
     pose.pose.orientation.w = 1.0
     waypoints.append(pose)
 
-# Di chuyển qua tất cả waypoints
 nav.followWaypoints(waypoints)
 while not nav.isTaskComplete():
     pass
-
-# Về home
-nav.goToPose(home_pose)
-```
-
-## Trạng thái Nav2 (State Machine)
-
-```
-IDLE → NAVIGATING → GOAL_REACHED
-            ↓
-        OBSTACLE_DETECTED → REPLANNING → NAVIGATING
-            ↓
-        NAVIGATION_FAILED → RECOVERY → IDLE
 ```

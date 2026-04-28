@@ -48,25 +48,34 @@ code ~/agri_robot_ws
 # → VS Code tự mở trên Windows, kết nối vào WSL2
 ```
 
-## Khởi động Simulation (từng bước)
+## Khởi động Simulation (từng bước — thứ tự bắt buộc)
 
 ```bash
 # Terminal 1: Gazebo + Robot URDF
+# Chờ: cửa sổ Gazebo mở + robot xanh xuất hiện (≈15 giây)
 ros2 launch agri_robot gazebo.launch.py
 
 # Terminal 2: Localization (EKF + navsat)
+# Chờ: "[navsat_transform]: Datum (latitude, longitude...)"
 ros2 launch agri_robot localization.launch.py
 
 # Terminal 3: Nav2
+# Chờ: "[lifecycle_manager_navigation]: Managed nodes are active"
 ros2 launch agri_robot navigation.launch.py
 
-# Terminal 4: AI Obstacle Avoidance
-ros2 run agri_robot yolo_detector &
-ros2 run agri_robot obstacle_publisher
+# Terminal 4: Return home / AI
+ros2 run agri_robot return_home
+# Hoặc Phase 4:
+# ros2 run agri_robot yolo_detector &
+# ros2 run agri_robot obstacle_publisher
 
-# Hoặc tất cả cùng lúc:
+# Hoặc tất cả cùng lúc (Phase 5):
 ros2 launch agri_robot full_demo.launch.py
 ```
+
+> **Lưu ý:** Gazebo phải được start từ terminal có DISPLAY (WSL2 terminal với WSLg).
+> Claude Code Bash tool không thể start Gazebo (không có DISPLAY). Nếu Gazebo crash,
+> phải restart thủ công từ terminal Ubuntu.
 
 ## One-shot Launch: full_demo.launch.py
 
@@ -189,21 +198,37 @@ ros2 service call /spawn_entity gazebo_msgs/srv/SpawnEntity \
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|
-| `Could not find transform base_link → map` | TF chưa publish | Chờ localization khởi động, check `ros2 run tf2_tools view_frames` |
+| `Could not find transform base_link → map` | Localization chưa chạy hoặc crash | Khởi động / restart `localization.launch.py`, check `ros2 run tf2_tools view_frames` |
 | Robot chìm xuống đất trong Gazebo | `<collision>` trong URDF sai | Kiểm tra mass, inertia values trong URDF |
 | Nav2 stuck, không di chuyển | Costmap inflation radius quá lớn | Giảm `inflation_radius` trong nav2_params.yaml |
 | YOLOv8 chạy chậm | CPU inference | Dùng `yolov8n.pt` hoặc enable GPU với CUDA |
 | GPS fix status = -1 | Plugin chưa có signal | Tăng `update_rate`, check plugin config |
+
+### Nav2 / BT XML Errors
+
+| Lỗi | Nguyên nhân | Fix |
+|---|---|---|
+| `Cannot open: libnav2_path_expiring_timer_condition_bt_node.so` | Plugin không tồn tại trong bản cài | Xóa khỏi `plugin_lib_names` trong nav2_params.yaml |
+| `Node not recognized: RemovePassedGoals` | Default BT XML dùng node không có trong build này | Tạo custom BT XML, set đường dẫn tuyệt đối trong nav2_params.yaml |
+| `Error loading XML: navigate_through_poses_w_replanning...` | bt_navigator load 2 BT XML — cái through_poses cũng bị lỗi | Tạo custom `navigate_through_poses_bt.xml` và set `default_nav_through_poses_bt_xml` |
+| BT XML custom không được load (vẫn dùng default) | nav2_bringup Humble không forward `default_nav_to_pose_bt_xml` launch arg | Set path trực tiếp trong `bt_navigator.ros__parameters` trong yaml |
+| `Behavior tree threw exception: Empty Tree` | `default_nav_to_pose_bt_xml: ""` trong yaml | Xóa dòng đó hoặc set path đầy đủ |
+| `Waiting for amcl/get_state...` vòng lặp vô hạn | `waitUntilNav2Active()` chờ AMCL (GPS setup không có AMCL) | Dùng `ActionClient.wait_for_server()` trực tiếp thay thế |
+| `odometry/global` không có data — bị treo | navsat_transform chờ IMU heading (robot đứng yên) | Set `use_odometry_yaw: true` trong navsat.yaml |
+| `Robot is out of bounds of the costmap` | Robot chưa có vị trí trong costmap (localization chưa lên) | Chờ localization ổn định trước khi start Nav2 |
 
 ## File Edit Guide
 
 | Muốn thay đổi | Sửa file này |
 |---|---|
 | Kích thước / hình dạng robot | `agri_robot/urdf/agri_robot.urdf.xacro` |
-| Tốc độ bánh xe, wheelbase | `agri_robot/config/controllers.yaml` |
-| EKF fusion weights | `agri_robot/config/ekf.yaml` |
+| Tốc độ bánh xe, wheel separation | `agri_robot/urdf/agri_robot.urdf.xacro` (diff_drive plugin) |
+| EKF fusion weights (local) | `agri_robot/config/ekf_local.yaml` |
+| EKF fusion weights (global) | `agri_robot/config/ekf_global.yaml` |
+| GPS transform config | `agri_robot/config/navsat.yaml` |
 | Tốc độ nav, vùng tránh | `agri_robot/config/nav2_params.yaml` |
-| YOLO model, confidence | `agri_robot/scripts/ai_vision/yolo_detector.py` |
-| Safety stop distance | `agri_robot/scripts/ai_vision/obstacle_publisher.py` |
-| Gazebo world (địa hình, cây) | `agri_robot/worlds/farm_field.sdf` |
-| Return-to-home logic | `agri_robot/scripts/navigation/return_home.py` |
+| Behavior Tree (Nav2) | `agri_robot/config/navigate_to_pose_bt.xml` |
+| Return-to-home logic | `agri_robot/agri_robot/navigation/return_home.py` |
+| YOLO model, confidence | `agri_robot/agri_robot/ai_vision/yolo_detector.py` (Phase 4) |
+| Safety stop distance | `agri_robot/agri_robot/ai_vision/obstacle_publisher.py` (Phase 4) |
+| Gazebo world (địa hình, cây) | `agri_robot/worlds/empty_field.sdf` |

@@ -6,8 +6,8 @@
 |---|---|---|---|
 | 0 | Cài đặt môi trường | 1–2 ngày | ✅ Hoàn thành |
 | 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ✅ Hoàn thành |
-| 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | 🔄 Đang làm |
-| 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | ⬜ Chưa bắt đầu |
+| 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ✅ Hoàn thành |
+| 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | 🔄 Code xong, chờ test end-to-end |
 | 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
 
@@ -183,40 +183,45 @@ q / z   ← Tăng / giảm tốc độ
 
 ---
 
-## Phase 2 — Localization (GPS + IMU → EKF)
+## Phase 2 — Localization (GPS + IMU → EKF) ✅
 
 **Mục tiêu:** Robot biết vị trí của mình (lat/lon → x/y/z trong map frame)
 
-**Files cần tạo:**
-- `agri_robot/config/ekf.yaml` — EKF filter config
-- `agri_robot/config/navsat.yaml` — navsat_transform config
+**Files đã tạo:**
+- `agri_robot/config/ekf_local.yaml` — Local EKF: `/odom` + `/imu/data` → `/odometry/local`
+- `agri_robot/config/ekf_global.yaml` — Global EKF: `/odometry/local` + `/odometry/gps` → `/odometry/global`
+- `agri_robot/config/navsat.yaml` — navsat_transform: GPS lat/lon → `/odometry/gps`
 - `agri_robot/launch/localization.launch.py`
 
-**Verification:**
-```bash
-ros2 topic echo /odometry/global
-# → Có data vị trí liên tục (x, y, z)
-ros2 topic echo /gps/fix
-# → Có latitude, longitude
-```
+**Kết quả verify ✅:**
+- `/odometry/global` có data trong `frame_id: map`
+- TF `map → odom → base_link` hoạt động
+
+**Gotchas:** Xem `.claude/memory.md` phần "Dual EKF" và lỗi `/odometry/global` bị treo.
 
 ---
 
-## Phase 3 — Nav2 + Return-to-Home
+## Phase 3 — Nav2 + Return-to-Home 🔄
 
 **Mục tiêu:** Robot nhận waypoint, tự di chuyển đến đích, và tự về home
 
-**Files cần tạo:**
-- `agri_robot/config/nav2_params.yaml` — Nav2 full config
+**Files đã tạo:**
+- `agri_robot/config/nav2_params.yaml` — Nav2 full config (GPS-based, rolling costmap, no static map)
+- `agri_robot/config/navigate_to_pose_bt.xml` — Custom BT XML (bỏ RemovePassedGoals)
+- `agri_robot/config/navigate_through_poses_bt.xml` — Custom BT XML cho through_poses
 - `agri_robot/launch/navigation.launch.py`
-- `agri_robot/scripts/navigation/return_home.py` — logic về nhà
+- `agri_robot/agri_robot/navigation/return_home.py`
+
+**Còn lại:** Test end-to-end sau khi restart Gazebo (đã crash)
 
 **Verification:**
 ```bash
-# Gửi goal qua RViz2 → robot tự đi
-# Chạy return_home.py → robot về đúng điểm xuất phát
+# Sau khi T1/T2/T3 đã chạy:
 ros2 run agri_robot return_home
+# → "Successfully returned home!"
 ```
+
+**Gotchas:** Xem `.claude/memory.md` phần lỗi BT XML và `waitUntilNav2Active()`.
 
 ---
 
