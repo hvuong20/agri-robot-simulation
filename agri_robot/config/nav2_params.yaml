@@ -16,8 +16,8 @@ bt_navigator:
     odom_topic: /odometry/global
     bt_loop_duration: 10
     default_server_timeout: 20
-    default_nav_to_pose_bt_xml: ""
-    default_nav_through_poses_bt_xml: ""
+    default_nav_to_pose_bt_xml: "/home/hvuong20/agri_robot_ws/install/agri_robot/share/agri_robot/config/navigate_to_pose_bt.xml"
+    default_nav_through_poses_bt_xml: "/home/hvuong20/agri_robot_ws/install/agri_robot/share/agri_robot/config/navigate_through_poses_bt.xml"
     plugin_lib_names:
       - nav2_compute_path_to_pose_action_bt_node
       - nav2_compute_path_through_poses_action_bt_node

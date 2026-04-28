@@ -61,8 +61,15 @@ def main():
 
     # ── 2. Navigate to home ────────────────────────────────────────────
     navigator = BasicNavigator()
-    navigator.get_logger().info('Waiting for Nav2 to become active...')
-    navigator.waitUntilNav2Active()
+    navigator.get_logger().info('Waiting for navigate_to_pose action server...')
+    # Wait for the action server directly — avoids AMCL/lifecycle service checks
+    # that don't apply to our GPS-based setup.
+    from rclpy.action import ActionClient
+    from nav2_msgs.action import NavigateToPose
+    _ac = ActionClient(navigator, NavigateToPose, 'navigate_to_pose')
+    while not _ac.wait_for_server(timeout_sec=1.0):
+        navigator.get_logger().info('navigate_to_pose not ready, waiting...')
+    navigator.get_logger().info('Nav2 action server ready!')
 
     goal = PoseStamped()
     goal.header.frame_id = 'map'
