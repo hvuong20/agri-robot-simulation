@@ -1,0 +1,31 @@
+# navsat_transform_node — converts GPS lat/lon → ROS odometry (x/y in map frame)
+#
+# Data flow:
+#   /gps/fix          (sensor_msgs/NavSatFix)   → input from Gazebo GPS plugin
+#   /imu/data         (sensor_msgs/Imu)         → needed for initial heading
+#   /odometry/filtered (nav_msgs/Odometry)      → from local EKF
+#       ↓
+#   /odometry/gps     (nav_msgs/Odometry)       → output to global EKF
+
+/**:
+  ros__parameters:
+    frequency: 30.0
+    delay: 3.0              # wait 3s for EKF to warm up before using GPS
+
+    # Vietnam — magnetic declination ≈ 0° (negligible, update if needed)
+    magnetic_declination_radians: 0.0
+
+    # Robot heading offset from GPS track direction
+    yaw_offset: 0.0
+
+    # Flatten GPS altitude — outdoor flat field, ignore elevation noise
+    zero_altitude: true
+
+    # Publish GPS as odometry (required by global EKF)
+    publish_filtered_gps: false
+
+    # Use EKF yaw for transform (more stable than GPS heading)
+    use_odometry_yaw: false
+
+    # Don't wait for a manually set datum — use first GPS fix as origin
+    wait_for_datum: false

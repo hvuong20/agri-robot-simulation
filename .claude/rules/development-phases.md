@@ -5,8 +5,8 @@
 | Phase | Nội dung | Thời gian | Trạng thái |
 |---|---|---|---|
 | 0 | Cài đặt môi trường | 1–2 ngày | ✅ Hoàn thành |
-| 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ⬜ Chưa bắt đầu |
-| 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ⬜ Chưa bắt đầu |
+| 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ✅ Hoàn thành |
+| 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | 🔄 Đang làm |
 | 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | ⬜ Chưa bắt đầu |
 | 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
@@ -161,23 +161,25 @@ q / z   ← Tăng / giảm tốc độ
 
 ---
 
-## Phase 1 — Mô hình Robot (URDF)
+## Phase 1 — Mô hình Robot (URDF) ✅
 
 **Mục tiêu:** Robot 4 bánh xuất hiện trong Gazebo, di chuyển được bằng teleop
 
-**Files cần tạo:**
-- `agri_robot/urdf/agri_robot.urdf.xacro` — mô hình 3D
-- `agri_robot/config/controllers.yaml` — 4WD skid-steer config
-- `agri_robot/launch/gazebo.launch.py` — khởi động Gazebo
-- `agri_robot/worlds/empty_field.sdf` — world trống để test
+**Files đã tạo:**
+- `agri_robot/urdf/agri_robot.urdf.xacro` — chassis 0.80×0.55×0.20m, 4 bánh, camera, IMU, GPS
+- `agri_robot/config/controllers.yaml` — drive geometry reference
+- `agri_robot/launch/gazebo.launch.py` — Gazebo Classic 11 launch
+- `agri_robot/worlds/empty_field.sdf` — đồng cỏ phẳng + GPS coordinates
 
-**Verification:**
-```bash
-ros2 launch agri_robot gazebo.launch.py
-# → Robot xuất hiện trong Gazebo
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
-# → Di chuyển được bằng phím
-```
+**Kết quả verify ✅:**
+- Robot xanh 4 bánh xuất hiện trong Gazebo
+- `/odom`, `/cmd_vel`, `/joint_states`, `/imu/data`, `/gps/fix` đều có
+- Teleop: tiến/lùi + quay trái/phải hoạt động
+
+**Gotchas đã gặp:**
+- Plugin `libgazebo_ros_diff_drive.so` cần `<ros/>` tag để khởi tạo ROS 2 node
+- Multi `<left_joint>` repeat không hoạt động — dùng 1 joint/bên cho Phase 1
+- Phải tăng angular speed bằng `E` trong teleop để quay rõ ràng
 
 ---
 

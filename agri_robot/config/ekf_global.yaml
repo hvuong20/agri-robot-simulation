@@ -1,0 +1,43 @@
+# EKF Global — fuses local odometry + GPS-derived odometry
+# Output: /odometry/global  (map frame — absolute, GPS-corrected)
+# Used by: Nav2 global planner, return-to-home
+#
+# Sensor fusion matrix layout (15 values per sensor):
+#   [x, y, z,  roll, pitch, yaw,  vx, vy, vz,  vroll, vpitch, vyaw,  ax, ay, az]
+
+/**:
+  ros__parameters:
+    frequency: 30.0
+    sensor_timeout: 0.1
+    two_d_mode: true
+    publish_tf: true
+
+    map_frame:       map
+    odom_frame:      odom
+    base_link_frame: base_link
+    world_frame:     map    # global EKF works in map frame (GPS-anchored)
+
+    # ── Local EKF output (/odometry/filtered) ──────────────────
+    # Trust: position (x,y), yaw, linear/angular velocity
+    odom0: /odometry/filtered
+    odom0_config: [true,  true,  false,
+                   false, false, true,
+                   true,  false, false,
+                   false, false, true,
+                   false, false, false]
+    odom0_differential: false
+    odom0_relative: false
+    odom0_queue_size: 10
+
+    # ── GPS-derived odometry (/odometry/gps) ────────────────────
+    # Published by navsat_transform_node after converting lat/lon → x/y
+    # Trust: x position, y position only (no velocity from GPS)
+    odom1: /odometry/gps
+    odom1_config: [true,  true,  false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false,
+                   false, false, false]
+    odom1_differential: false
+    odom1_relative: false
+    odom1_queue_size: 10
