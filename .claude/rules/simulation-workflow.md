@@ -1,17 +1,51 @@
 # Simulation Workflow
 
-## Local Development Setup
+## Windows + WSL2 Development Setup
+
+```
+┌─────────────────────────────────────────────┐
+│              Windows 11                     │
+│                                             │
+│  VS Code ──Remote WSL──► WSL2 Ubuntu 22.04  │
+│  Windows Terminal ──────► WSL2 Ubuntu 22.04  │
+│                                             │
+│  Gazebo GUI ◄── WSLg ── (tự động)           │
+│  RViz2  GUI ◄── WSLg ── (tự động)           │
+└─────────────────────────────────────────────┘
+```
+
+### Mở WSL2 terminal từ Windows
+
+- **Cách 1:** Start Menu → tìm "Ubuntu 22.04" → mở
+- **Cách 2:** Windows Terminal → dropdown → chọn "Ubuntu 22.04"
+- **Cách 3:** VS Code → Terminal → New Terminal (sau khi connect Remote WSL)
+
+### Workspace Setup (chạy trong WSL2)
 
 ```bash
-# Workspace
-mkdir -p ~/ros2_ws/src
-cd ~/ros2_ws/src
-ln -s /path/to/Agri_Robot_Simulation/agri_robot .
+# Tạo workspace
+mkdir -p ~/agri_robot_ws/src
+cd ~/agri_robot_ws/src
+
+# Copy hoặc tạo package agri_robot ở đây (KHÔNG dùng /mnt/c/ — chậm)
+# Nếu files đang ở Windows: copy vào WSL2
+cp -r /mnt/c/Claude_project/Agri_Robot_Simulation/agri_robot ~/agri_robot_ws/src/
 
 # Build
-cd ~/ros2_ws
+cd ~/agri_robot_ws
 colcon build --packages-select agri_robot
 source install/setup.bash
+
+# Thêm vào ~/.bashrc
+echo "source ~/agri_robot_ws/install/setup.bash" >> ~/.bashrc
+```
+
+### Mở project bằng VS Code (từ WSL2)
+
+```bash
+# Trong WSL2 terminal, gõ:
+code ~/agri_robot_ws
+# → VS Code tự mở trên Windows, kết nối vào WSL2
 ```
 
 ## Khởi động Simulation (từng bước)
@@ -126,6 +160,18 @@ gz model --spawn-file=person.sdf --model-name=person1 -x 3 -y 0 -z 0
 ```
 
 ## Common Errors & Fixes
+
+### WSL2-specific
+
+| Lỗi | Nguyên nhân | Fix |
+|---|---|---|
+| Gazebo không mở cửa sổ GUI | WSLg chưa kích hoạt | Đảm bảo Windows 11 + WSL2 đã update (`wsl --update`) |
+| `LIBGL_ERROR: No matching fbConfigs` | GPU driver WSL2 chưa cài | Cài WSL2 GPU driver từ trang NVIDIA/AMD/Intel |
+| Build rất chậm trong `/mnt/c/` | Windows filesystem I/O bottleneck | Chuyển code vào `~/` (WSL2 filesystem) |
+| `ros2: command not found` sau khi mở terminal mới | Chưa source setup | Thêm `source /opt/ros/humble/setup.bash` vào `~/.bashrc` |
+| Gazebo mở nhưng rất lag | Không dùng GPU acceleration | Cài driver GPU WSL2, kiểm tra `glxinfo | grep renderer` |
+
+### ROS 2 / Gazebo chung
 
 | Lỗi | Nguyên nhân | Fix |
 |---|---|---|

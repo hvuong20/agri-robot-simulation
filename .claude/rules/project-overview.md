@@ -15,7 +15,8 @@ ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
 
 | Layer | Công nghệ | Vai trò |
 |---|---|---|
-| OS | Ubuntu 22.04 LTS | Hệ điều hành nền |
+| OS (host) | **Windows 11** | Máy tính phát triển |
+| OS (dev) | **WSL2 + Ubuntu 22.04** | Môi trường Linux chạy bên trong Windows |
 | Middleware | **ROS 2 Humble** (LTS đến 2027) | Kết nối tất cả modules |
 | Simulator | **Gazebo Harmonic** | Vật lý, sensor simulation |
 | Navigation | **Nav2** | Path planning, return-to-home |
@@ -23,7 +24,12 @@ ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
 | AI / Vision | **YOLOv8** (Ultralytics) + **OpenCV** | Object detection từ camera |
 | AI Backend | **PyTorch** 2.x | Runtime cho YOLOv8 |
 | Visualization | **RViz2** | Debug robot, path, sensor data |
+| Code Editor | **VS Code** + Remote WSL extension | Viết code từ Windows, chạy trong WSL2 |
 | Language | **Python** 3.10+ | ROS 2 nodes (ưu tiên Python trước C++) |
+
+> **Tại sao WSL2 thay vì ROS 2 native Windows?**
+> ROS 2 có bản native Windows nhưng thiếu nhiều package, Gazebo không chạy tốt.
+> WSL2 cho môi trường Linux đầy đủ bên trong Windows — tất cả tutorial và package đều hoạt động bình thường.
 
 ## Sensors (Planned)
 
