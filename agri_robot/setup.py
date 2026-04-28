@@ -30,6 +30,7 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
+            'return_home = agri_robot.navigation.return_home:main',
         ],
     },
 )
