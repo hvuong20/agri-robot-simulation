@@ -6,11 +6,12 @@ Usage:
     ros2 run agri_robot return_home
 
 Workflow:
-    1. Saves current position as home
-    2. Waits for user to press Enter (drive robot away with teleop first)
-    3. Checks robot has moved at least MIN_DIST metres from home
-    4. Sends NavigateToPose goal back to home
-    5. Prints distance remaining until arrived
+    1. Waits for /odometry/global to STABILIZE (EKF converged, no big jumps)
+    2. Saves stable position as home
+    3. Waits for user to press Enter (drive robot away with teleop first)
+    4. Checks robot has moved at least MIN_DIST metres from home
+    5. Sends NavigateToPose goal back to home
+    6. Prints distance remaining until arrived
 
 Prerequisites (must be running):
     ros2 launch agri_robot gazebo.launch.py
@@ -18,6 +19,7 @@ Prerequisites (must be running):
     ros2 launch agri_robot navigation.launch.py
 """
 import math
+import time
 
 import rclpy
 from rclpy.node import Node
@@ -27,25 +29,25 @@ from nav_msgs.msg import Odometry
 from nav2_msgs.action import NavigateToPose
 from nav2_simple_commander.robot_navigator import BasicNavigator, TaskResult
 
-MIN_DIST = 1.0   # metres — robot must be at least this far from home before navigating back
+MIN_DIST      = 1.0   # metres — robot must move at least this far from home
+STABLE_SECS   = 3.0   # seconds of stable odometry = EKF converged
+STABLE_THRESH = 1.0   # metres — max drift during stable window
+EKF_TIMEOUT   = 60.0  # seconds — give up waiting for EKF
 
 
 class _OdomReader(Node):
-    """Reads one message from /odometry/global and stores it."""
+    """Subscribes to /odometry/global and tracks latest pose."""
 
     def __init__(self, node_name='_odom_reader'):
         super().__init__(node_name)
         self._pose = None
-        self._sub = self.create_subscription(
-            Odometry, '/odometry/global', self._cb, 10)
+        self.create_subscription(Odometry, '/odometry/global', self._cb, 10)
 
     def _cb(self, msg: Odometry):
-        if self._pose is None:
-            self._pose = msg.pose.pose
+        self._pose = msg.pose.pose
 
-    def spin_until_ready(self):
-        while self._pose is None:
-            rclpy.spin_once(self, timeout_sec=0.1)
+    def spin_once(self, timeout=0.1):
+        rclpy.spin_once(self, timeout_sec=timeout)
 
     @property
     def pose(self):
@@ -57,46 +59,103 @@ def _dist(a, b) -> float:
                      (a.position.y - b.position.y) ** 2)
 
 
-def _fix_quaternion(orientation):
-    """Return w=1 if quaternion is zero (invalid), else unchanged."""
-    total = (orientation.x ** 2 + orientation.y ** 2 +
-             orientation.z ** 2 + orientation.w ** 2)
-    if total < 0.01:
-        orientation.w = 1.0
-    return orientation
+def _fix_quaternion(ori):
+    """Set w=1 if quaternion is invalid (all zeros)."""
+    if (ori.x ** 2 + ori.y ** 2 + ori.z ** 2 + ori.w ** 2) < 0.01:
+        ori.w = 1.0
+    return ori
+
+
+def wait_for_stable_odometry(reader: _OdomReader) -> bool:
+    """
+    Wait until /odometry/global stops jumping — signals EKF convergence.
+    Returns True when stable, False on timeout.
+
+    /odometry/global outputs absolute UTM coordinates. At startup, before
+    GPS/EKF converges, the position can jump hundreds of km. We wait for
+    the position to remain within STABLE_THRESH metres for STABLE_SECS
+    seconds before trusting it as the true home position.
+    """
+    print('[EKF] Waiting for odometry to stabilize (EKF convergence) ...')
+    print(f'[EKF] Need {STABLE_SECS}s without jumps > {STABLE_THRESH} m  '
+          f'(timeout {EKF_TIMEOUT}s)')
+
+    # wait for first message
+    t_start = time.time()
+    while reader.pose is None:
+        reader.spin_once()
+        if time.time() - t_start > EKF_TIMEOUT:
+            return False
+
+    anchor_pose  = reader.pose
+    stable_since = time.time()
+    last_reported = time.time()
+
+    while time.time() - t_start < EKF_TIMEOUT:
+        reader.spin_once()
+        current = reader.pose
+        if current is None:
+            continue
+
+        drift = _dist(anchor_pose, current)
+
+        # Print progress every 2s
+        if time.time() - last_reported > 2.0:
+            elapsed_stable = time.time() - stable_since
+            print(f'[EKF] pos=({current.position.x:.1f}, {current.position.y:.1f})  '
+                  f'drift={drift:.2f} m  stable={elapsed_stable:.1f}s/{STABLE_SECS}s')
+            last_reported = time.time()
+
+        if drift > STABLE_THRESH:
+            # EKF jumped — reset stable window
+            anchor_pose  = current
+            stable_since = time.time()
+        elif time.time() - stable_since >= STABLE_SECS:
+            print(f'[EKF] STABLE at x={current.position.x:.3f}  y={current.position.y:.3f}')
+            return True
+
+    return False
 
 
 def main():
     rclpy.init()
 
-    # ── 1. Save home ───────────────────────────────────────────────────────
-    saver = _OdomReader('_home_saver')
-    saver.get_logger().info('Waiting for /odometry/global ...')
-    saver.spin_until_ready()
-    home_pose = saver.pose
-    saver.destroy_node()
+    reader = _OdomReader()
 
-    print(f'\n>>> HOME saved:  x={home_pose.position.x:.3f}  y={home_pose.position.y:.3f}')
-    print('>>> Now drive the robot AWAY from home using teleop.')
-    print('>>> When done, come back to this terminal and press Enter...\n')
-    input('    [Press Enter to start navigating back to home]\n')
+    # ── 1. Wait for EKF to converge ───────────────────────────────────────
+    if not wait_for_stable_odometry(reader):
+        print('\nERROR: /odometry/global did not stabilize within '
+              f'{EKF_TIMEOUT}s.')
+        print('Check: is localization.launch.py running?  '
+              'Is GPS fix available?')
+        rclpy.shutdown()
+        return
 
-    # ── 2. Read current position ───────────────────────────────────────────
-    reader = _OdomReader('_pos_reader')
-    reader.spin_until_ready()
-    current_pose = reader.pose
+    home_pose = reader.pose
     reader.destroy_node()
 
-    dist = _dist(home_pose, current_pose)
-    print(f'\n>>> Current pos: x={current_pose.position.x:.3f}  y={current_pose.position.y:.3f}')
-    print(f'>>> Distance from home: {dist:.2f} m')
+    # ── 2. Show home + wait for user to drive away ────────────────────────
+    print(f'\n>>> HOME: x={home_pose.position.x:.3f}  y={home_pose.position.y:.3f}')
+    print('>>> Drive the robot AWAY using teleop now.')
+    print('>>> When done, come back here and press Enter ...\n')
+    input('    [Press Enter to navigate back to home]\n')
 
-    if dist < MIN_DIST:
-        print(f'\n>>> WARNING: robot is only {dist:.2f} m from home (minimum {MIN_DIST} m).')
-        print('>>> Drive the robot further away before testing return-to-home.')
-        print('>>> Continuing anyway — robot may not visibly move.\n')
+    # ── 3. Check robot actually moved ─────────────────────────────────────
+    curr_reader = _OdomReader('_curr_reader')
+    curr_reader.spin_once(timeout=1.0)
+    current_pose = curr_reader.pose
+    curr_reader.destroy_node()
 
-    # ── 3. Wait for Nav2 action server ────────────────────────────────────
+    if current_pose is not None:
+        dist = _dist(home_pose, current_pose)
+        print(f'\n>>> Current: x={current_pose.position.x:.3f}  '
+              f'y={current_pose.position.y:.3f}')
+        print(f'>>> Distance from home: {dist:.2f} m')
+        if dist < MIN_DIST:
+            print(f'\n>>> WARNING: only {dist:.2f} m from home — '
+                  f'drive further before testing.\n')
+
+    # ── 4. Wait for Nav2 ──────────────────────────────────────────────────
     navigator = BasicNavigator()
     navigator.get_logger().info('Waiting for navigate_to_pose action server...')
     _ac = ActionClient(navigator, NavigateToPose, 'navigate_to_pose')
@@ -104,25 +163,25 @@ def main():
         navigator.get_logger().info('navigate_to_pose not ready, waiting...')
     navigator.get_logger().info('Nav2 ready — sending goal!')
 
-    # ── 4. Send goal ───────────────────────────────────────────────────────
+    # ── 5. Send goal ───────────────────────────────────────────────────────
     goal = PoseStamped()
     goal.header.frame_id = 'map'
-    goal.header.stamp = navigator.get_clock().now().to_msg()
-    goal.pose.position = home_pose.position
+    goal.header.stamp    = navigator.get_clock().now().to_msg()
+    goal.pose.position   = home_pose.position
     goal.pose.orientation = _fix_quaternion(home_pose.orientation)
 
     navigator.get_logger().info(
-        f'Returning to home: x={home_pose.position.x:.3f}  y={home_pose.position.y:.3f}')
+        f'Returning to x={home_pose.position.x:.3f}  '
+        f'y={home_pose.position.y:.3f}')
     navigator.goToPose(goal)
 
-    # ── 5. Monitor progress ────────────────────────────────────────────────
+    # ── 6. Monitor ─────────────────────────────────────────────────────────
     while not navigator.isTaskComplete():
         feedback = navigator.getFeedback()
         if feedback:
             navigator.get_logger().info(
                 f'Distance remaining: {feedback.distance_remaining:.2f} m')
 
-    # ── 6. Report result ───────────────────────────────────────────────────
     result = navigator.getResult()
     if result == TaskResult.SUCCEEDED:
         navigator.get_logger().info('Successfully returned home!')
