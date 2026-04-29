@@ -87,9 +87,10 @@ def wait_for_stable_odometry(reader: _OdomReader) -> bool:
         if time.time() - t_start > EKF_TIMEOUT:
             return False
 
-    anchor_pose  = reader.pose
-    stable_since = time.time()
+    anchor_pose   = reader.pose
+    stable_since  = time.time()
     last_reported = time.time()
+    last_log_pose = reader.pose   # separate reference for display — NOT reset on anchor reset
 
     while time.time() - t_start < EKF_TIMEOUT:
         reader.spin_once()
@@ -99,12 +100,14 @@ def wait_for_stable_odometry(reader: _OdomReader) -> bool:
 
         drift = _dist(anchor_pose, current)
 
-        # Print progress every 2s
+        # Print progress every 2s — show drift vs PREVIOUS log point, not vs anchor
         if time.time() - last_reported > 2.0:
+            display_drift = _dist(last_log_pose, current)
             elapsed_stable = time.time() - stable_since
             print(f'[EKF] pos=({current.position.x:.1f}, {current.position.y:.1f})  '
-                  f'drift={drift:.2f} m  stable={elapsed_stable:.1f}s/{STABLE_SECS}s')
+                  f'jump={display_drift:.1f} m  stable={elapsed_stable:.1f}s/{STABLE_SECS}s')
             last_reported = time.time()
+            last_log_pose = current
 
         if drift > STABLE_THRESH:
             # EKF jumped — reset stable window

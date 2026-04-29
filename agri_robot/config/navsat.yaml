@@ -12,6 +12,13 @@
     frequency: 30.0
     delay: 1.0              # wait 1s for EKF to warm up before using GPS
 
+    # Explicit datum matching spherical_coordinates in empty_field.sdf.
+    # Must be set explicitly — relying on first GPS fix as datum causes
+    # incorrect map frame initialization when yaw isn't ready at startup.
+    # Format: [latitude_deg, longitude_deg, yaw_rad]
+    datum: [10.4500, 105.6300, 0.0]
+    wait_for_datum: false
+
     # Vietnam — magnetic declination ≈ 0° (negligible, update if needed)
     magnetic_declination_radians: 0.0
 
@@ -26,6 +33,3 @@
 
     # Use local EKF yaw instead of IMU orientation (avoids heading init problem)
     use_odometry_yaw: true
-
-    # Don't wait for a manually set datum — use first GPS fix as origin
-    wait_for_datum: false

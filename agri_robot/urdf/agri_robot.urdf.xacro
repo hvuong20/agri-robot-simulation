@@ -361,6 +361,22 @@
     <sensor name="gps_sensor" type="gps">
       <always_on>true</always_on>
       <update_rate>10</update_rate>
+      <gps>
+        <position_sensing>
+          <horizontal>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>1.5</stddev>
+            </noise>
+          </horizontal>
+          <vertical>
+            <noise type="gaussian">
+              <mean>0.0</mean>
+              <stddev>3.0</stddev>
+            </noise>
+          </vertical>
+        </position_sensing>
+      </gps>
       <plugin filename="libgazebo_ros_gps_sensor.so" name="gps_plugin">
         <ros>
           <remapping>~/out:=/gps/fix</remapping>
