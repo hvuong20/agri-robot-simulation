@@ -9,7 +9,7 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Cài WSL2 + ROS 2 Humble + Gazebo Classic 11 | ✅ Hoàn thành |
-| 1 | URDF robot 4WD + Gazebo launch + teleop | ✅ Hoàn thành |
+| 1 | URDF robot 2-motor skid-steer (4 bánh) + Gazebo launch + teleop + twist_mux | ✅ Hoàn thành |
 | 2 | Localization: dual EKF + navsat_transform | ✅ Hoàn thành |
 | 3 | Nav2 + Return-to-Home | ✅ Hoàn thành — `Successfully returned home!` |
 | 4 | AI Obstacle Avoidance (YOLOv8) | ⬜ Chưa bắt đầu |
@@ -28,13 +28,15 @@ Track width (wheel_separation): 0.62 m
 Max speed: 1.5 m/s linear, 1.0 rad/s angular
 ```
 
-### 4WD — 2 diff_drive plugins (QUAN TRỌNG)
-Robot dùng **2 plugin** `libgazebo_ros_diff_drive.so`:
-- `drive_front`: điều khiển `front_left_wheel_joint` + `front_right_wheel_joint`
-  - `publish_odom: true`, `publish_odom_tf: true`
-- `drive_rear`: điều khiển `rear_left_wheel_joint` + `rear_right_wheel_joint`
-  - `publish_odom: false`, `publish_odom_tf: false` (tránh duplicate)
-- Cả 2 đều subscribe cùng topic `cmd_vel`
+### Dẫn động 2 Motor Skid-Steer (4 bánh) — 2 diff_drive plugins (QUAN TRỌNG)
+Robot phần cứng chỉ có **2 motor**: motor trái (front_left + rear_left liên kết cơ học) và motor phải (front_right + rear_right liên kết cơ học). Đây là skid-steer diff-drive tiêu chuẩn — **không phải 4 motor độc lập**.
+
+Trong Gazebo Classic, `libgazebo_ros_diff_drive.so` chỉ nhận 1 left joint + 1 right joint nên phải dùng **2 plugin** để kéo đủ 4 bánh (hiệu ứng tương đương 2-motor):
+- `drive_front`: `front_left_wheel_joint` + `front_right_wheel_joint` — `publish_odom: true`
+- `drive_rear`: `rear_left_wheel_joint` + `rear_right_wheel_joint` — `publish_odom: false` (tránh duplicate)
+- Cả 2 subscribe `/cmd_vel_mux` (output của twist_mux) qua `<remapping>cmd_vel:=cmd_vel_mux</remapping>`
+
+**QUAN TRỌNG:** Không dùng `<command_topic>` — tag đó bị Gazebo Classic ROS 2 ignore silently. Phải dùng `<remapping>` bên trong `<ros>`.
 
 ### Dual EKF — topic names thực
 ```
@@ -62,6 +64,23 @@ while not _ac.wait_for_server(timeout_sec=1.0):
     ...  # chờ action server
 ```
 Lưu home từ `/odometry/global` (không phải `/gps/fix`) — đã ở map frame, dùng trực tiếp làm PoseStamped.
+
+---
+
+### twist_mux — tách teleop và Nav2 (QUAN TRỌNG)
+`velocity_smoother` (Nav2 node) publish `/cmd_vel` liên tục ở 20 Hz với zero velocity → **override teleop**.
+**Fix:** Dùng `twist_mux` để route `/cmd_vel_teleop` (priority 10) và `/cmd_vel` (priority 1) → `/cmd_vel_mux`.
+Robot URDF plugins (`drive_front`, `drive_rear`) subscribe `/cmd_vel_mux` (không phải `/cmd_vel`).
+
+Topology thực tế:
+```
+teleop → /cmd_vel_teleop (priority 10) ─┐
+Nav2 (velocity_smoother) → /cmd_vel (p1)├─► twist_mux → /cmd_vel_mux → robot
+```
+
+File config: `config/twist_mux.yaml`
+Launch: twist_mux node trong `gazebo.launch.py`, remap `/cmd_vel_out` → `/cmd_vel_mux`
+Teleop command: `ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/cmd_vel_teleop`
 
 ---
 
@@ -149,6 +168,20 @@ Khi set `default_nav_to_pose_bt_xml: ""` trong yaml, bt_navigator load empty str
 ### [P3] ModuleNotFoundError: No module named 'agri_robot.navigation'
 **Root cause:** Chạy `cp -r` nhiều lần → nested directory: `agri_robot/agri_robot/agri_robot/navigation/`
 **Fix:** `rm -rf ~/agri_robot_ws/src/agri_robot && cp -r ... ~/agri_robot_ws/src/agri_robot`
+
+### [P3] Teleop không hoạt động — robot đứng yên khi bấm 'i'
+**Root cause:** `velocity_smoother` (Nav2) publish zero velocity lên `/cmd_vel` ở 20 Hz, override mọi teleop.
+`ros2 topic info /cmd_vel` → Publisher count: 6 (velocity_smoother + behavior_server).
+**Fix:** Dùng `twist_mux` — xem phần "twist_mux" ở trên.
+
+### [colcon] Build lỗi "can't copy ... urdf/urdf: doesn't exist or not a regular file"
+**Root cause:** Dùng `cp -r .../config/` tạo nested dir `config/config/` hoặc `urdf/urdf/` trong src.
+Colcon cache lưu nested path → build lần sau fail dù đã xóa nested dir.
+**Fix:** `rm -rf build/agri_robot install/agri_robot` rồi rebuild sạch.
+**Phòng ngừa:** Copy từng file thay vì `cp -r dir/` khi dest dir đã tồn tại:
+```bash
+cp /mnt/c/.../config/twist_mux.yaml ~/agri_robot_ws/src/agri_robot/config/
+```
 
 ---
 

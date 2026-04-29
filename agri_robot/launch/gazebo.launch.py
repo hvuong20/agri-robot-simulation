@@ -63,4 +63,15 @@ def generate_launch_description():
         ],
     )
 
-    return LaunchDescription([gazebo, rsp, spawn])
+    twist_mux_config = os.path.join(pkg_path, 'config', 'twist_mux.yaml')
+
+    twist_mux = Node(
+        package='twist_mux',
+        executable='twist_mux',
+        name='twist_mux',
+        output='screen',
+        parameters=[twist_mux_config],
+        remappings=[('cmd_vel_out', '/cmd_vel_mux')],
+    )
+
+    return LaunchDescription([gazebo, rsp, spawn, twist_mux])

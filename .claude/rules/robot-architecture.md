@@ -48,26 +48,32 @@ base_link
 | Footprint radius (Nav2) | 0.50 m |
 | Tốc độ tối đa | 1.5 m/s linear, 1.0 rad/s angular |
 
-## 4WD Skid-Steer Configuration (Gazebo Classic)
+## Cấu hình Dẫn động — 2 Motor Skid-Steer (4 bánh)
 
-**Nguyên lý:** Điều khiển tốc độ 2 bên trái/phải khác nhau để quay.
-- Rẽ trái: bánh phải quay nhanh hơn bánh trái
-- Rẽ phải: bánh trái quay nhanh hơn bánh phải
-- Quay tại chỗ: 2 bên quay ngược chiều nhau
+**Phần cứng thực tế:** Robot chỉ có **2 motor**:
+- Motor trái: kéo `front_left` + `rear_left` qua liên kết cơ học (xích/đai)
+- Motor phải: kéo `front_right` + `rear_right` qua liên kết cơ học
 
-**Triển khai thực tế — 2 plugin diff_drive:**
+**Nguyên lý điều khiển (skid-steer):**
+- Tiến/lùi: 2 bên cùng tốc độ
+- Rẽ trái: motor phải nhanh hơn motor trái
+- Rẽ phải: motor trái nhanh hơn motor phải
+- Quay tại chỗ: 2 bên ngược chiều nhau
 
-Gazebo Classic `libgazebo_ros_diff_drive.so` chỉ điều khiển được 2 bánh (1 trái + 1 phải).
-Để có true 4WD, dùng **2 plugin riêng biệt**:
+**Triển khai Gazebo Classic — 2 plugin diff_drive:**
+
+`libgazebo_ros_diff_drive.so` chỉ nhận 1 left joint + 1 right joint. Dùng **2 plugin** để kéo đủ 4 bánh — hiệu ứng mô phỏng hoàn toàn tương đương 2-motor phần cứng:
 
 ```xml
 <!-- Plugin 1: Front axle — publish odom và TF -->
 <plugin name="drive_front" filename="libgazebo_ros_diff_drive.so">
+  <ros>
+    <remapping>cmd_vel:=cmd_vel_mux</remapping>
+  </ros>
   <left_joint>front_left_wheel_joint</left_joint>
   <right_joint>front_right_wheel_joint</right_joint>
   <wheel_separation>0.62</wheel_separation>
   <wheel_diameter>0.20</wheel_diameter>
-  <command_topic>cmd_vel</command_topic>
   <publish_odom>true</publish_odom>
   <publish_odom_tf>true</publish_odom_tf>
   <robot_base_frame>base_footprint</robot_base_frame>
@@ -75,17 +81,21 @@ Gazebo Classic `libgazebo_ros_diff_drive.so` chỉ điều khiển được 2 b�
 
 <!-- Plugin 2: Rear axle — KHÔNG publish odom (tránh duplicate) -->
 <plugin name="drive_rear" filename="libgazebo_ros_diff_drive.so">
+  <ros>
+    <remapping>cmd_vel:=cmd_vel_mux</remapping>
+  </ros>
   <left_joint>rear_left_wheel_joint</left_joint>
   <right_joint>rear_right_wheel_joint</right_joint>
   <wheel_separation>0.62</wheel_separation>
   <wheel_diameter>0.20</wheel_diameter>
-  <command_topic>cmd_vel</command_topic>   <!-- cùng topic với front -->
   <publish_odom>false</publish_odom>
   <publish_odom_tf>false</publish_odom_tf>
 </plugin>
 ```
 
-**Kết quả:** Cả 4 bánh đều quay đồng bộ theo `/cmd_vel`. `/odom` chỉ được publish 1 lần (từ front plugin).
+**Quan trọng:** Dùng `<remapping>cmd_vel:=cmd_vel_mux</remapping>` bên trong `<ros>` — **không dùng `<command_topic>`** vì tag đó bị Gazebo Classic ROS 2 ignore silently.
+
+**Kết quả:** Cả 4 bánh quay đồng bộ theo `/cmd_vel_mux`. `/odom` chỉ publish 1 lần (từ front plugin).
 
 ## Sensor Configuration
 
