@@ -31,6 +31,7 @@ setup(
     entry_points={
         'console_scripts': [
             'return_home = agri_robot.navigation.return_home:main',
+            'yolo_obstacle_node = agri_robot.ai_vision.yolo_obstacle_node:main',
         ],
     },
 )

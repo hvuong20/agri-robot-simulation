@@ -7,7 +7,7 @@
 | 0 | Cài đặt môi trường | 1–2 ngày | ✅ Hoàn thành |
 | 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ✅ Hoàn thành |
 | 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ✅ Hoàn thành |
-| 3 | Nav2 Path Planning + Return-to-Home | 3–4 ngày | 🔄 Code xong, chờ test end-to-end |
+| 3 | Nav2 Path Planning + Return-to-Home + Teleop | 3–4 ngày | ✅ Hoàn thành |
 | 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
 | 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
 
@@ -201,27 +201,24 @@ q / z   ← Tăng / giảm tốc độ
 
 ---
 
-## Phase 3 — Nav2 + Return-to-Home 🔄
+## Phase 3 — Nav2 + Return-to-Home + Teleop ✅
 
-**Mục tiêu:** Robot nhận waypoint, tự di chuyển đến đích, và tự về home
+**Mục tiêu:** Robot nhận waypoint, tự di chuyển đến đích, và tự về home. Teleop hoạt động song song với Nav2.
 
 **Files đã tạo:**
 - `agri_robot/config/nav2_params.yaml` — Nav2 full config (GPS-based, rolling costmap, no static map)
-- `agri_robot/config/navigate_to_pose_bt.xml` — Custom BT XML (bỏ RemovePassedGoals)
+- `agri_robot/config/navigate_to_pose_bt.xml` — Custom BT XML (bỏ RemovePassedGoals, error_code_id)
 - `agri_robot/config/navigate_through_poses_bt.xml` — Custom BT XML cho through_poses
+- `agri_robot/config/twist_mux.yaml` — Priority routing: teleop(10) > Nav2(1) → /cmd_vel_mux
 - `agri_robot/launch/navigation.launch.py`
+- `agri_robot/launch/gazebo.launch.py` — thêm twist_mux node
 - `agri_robot/agri_robot/navigation/return_home.py`
 
-**Còn lại:** Test end-to-end sau khi restart Gazebo (đã crash)
+**Kết quả verify ✅:**
+- `ros2 run agri_robot return_home` → "Successfully returned home!"
+- Teleop: `ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/cmd_vel_teleop` → robot chạy
 
-**Verification:**
-```bash
-# Sau khi T1/T2/T3 đã chạy:
-ros2 run agri_robot return_home
-# → "Successfully returned home!"
-```
-
-**Gotchas:** Xem `.claude/memory.md` phần lỗi BT XML và `waitUntilNav2Active()`.
+**Gotchas:** Xem `.claude/memory.md` phần lỗi BT XML, `waitUntilNav2Active()`, và twist_mux.
 
 ---
 
