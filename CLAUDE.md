@@ -20,7 +20,7 @@ Hệ thống mô phỏng robot nông nghiệp skid-steer tự hành (4 bánh, 2 
 | `ai-obstacle-avoidance.md` | YOLOv8, depth camera, costmap integration | AI/vision files |
 | `simulation-workflow.md` | Gazebo setup, launch files, common errors & fixes | On request |
 
-## Trạng thái nhanh (cập nhật 2026-04-29)
+## Trạng thái nhanh (cập nhật 2026-04-30)
 
 | Phase | Status |
 |---|---|
@@ -28,5 +28,5 @@ Hệ thống mô phỏng robot nông nghiệp skid-steer tự hành (4 bánh, 2 
 | 1 — URDF + Gazebo | ✅ Xong |
 | 2 — Localization | ✅ Xong |
 | 3 — Nav2 + Return-Home | ✅ Xong — `Successfully returned home!` |
-| 4 — AI Obstacle Avoidance | ⬜ Chưa bắt đầu |
+| 4 — AI Obstacle Avoidance | 🔧 Code xong — depth camera + yolo node + nav2 layer. Cần test thực tế |
 | 5 — Farm World + Testing | ⬜ Chưa bắt đầu |

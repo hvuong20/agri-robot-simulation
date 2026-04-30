@@ -386,9 +386,10 @@
     </sensor>
   </gazebo>
 
-  <!-- ── RGB Camera (Phase 3) ─────────────────────────────
-       libgazebo_ros_camera.so — available in gazebo-ros-pkgs.
-       Depth camera (libgazebo_ros_openni_kinect.so) added Phase 4.
+  <!-- ── RGB Camera ───────────────────────────────────────
+       libgazebo_ros_camera.so publishes:
+         /camera/image_raw      (sensor_msgs/Image, RGB)
+         /camera/camera_info    (sensor_msgs/CameraInfo)
   ────────────────────────────────────────────────────────── -->
   <gazebo reference="camera_link">
     <sensor type="camera" name="rgb_camera">
@@ -412,6 +413,41 @@
           <remapping>camera_info:=/camera/camera_info</remapping>
         </ros>
         <camera_name>camera</camera_name>
+        <frame_name>camera_optical_link</frame_name>
+      </plugin>
+    </sensor>
+  </gazebo>
+
+  <!-- ── Depth Camera (Phase 4) ───────────────────────────
+       Same camera_link, type="depth".
+       libgazebo_ros_camera.so handles depth in Gazebo Classic 11.
+       Publishes depth image as 32FC1 (metres).
+         /camera/depth/image_raw   (sensor_msgs/Image, 32FC1)
+         /camera/depth/camera_info (sensor_msgs/CameraInfo)
+       Consumed by yolo_obstacle_node for 3-D obstacle localisation.
+  ────────────────────────────────────────────────────────── -->
+  <gazebo reference="camera_link">
+    <sensor type="depth" name="depth_camera">
+      <always_on>true</always_on>
+      <update_rate>10</update_rate>
+      <camera>
+        <horizontal_fov>1.0472</horizontal_fov>
+        <image>
+          <width>640</width>
+          <height>480</height>
+          <format>R8G8B8</format>
+        </image>
+        <clip>
+          <near>0.05</near>
+          <far>10.0</far>
+        </clip>
+      </camera>
+      <plugin name="depth_camera_controller" filename="libgazebo_ros_camera.so">
+        <ros>
+          <remapping>image_raw:=/camera/depth/image_raw</remapping>
+          <remapping>camera_info:=/camera/depth/camera_info</remapping>
+        </ros>
+        <camera_name>depth_camera</camera_name>
         <frame_name>camera_optical_link</frame_name>
       </plugin>
     </sensor>

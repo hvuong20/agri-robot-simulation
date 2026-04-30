@@ -4,7 +4,7 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 
 ---
 
-## Trạng thái Phase (cập nhật 2026-04-29)
+## Trạng thái Phase (cập nhật 2026-04-30)
 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
@@ -12,7 +12,7 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 | 1 | URDF robot 2-motor skid-steer (4 bánh) + Gazebo launch + teleop + twist_mux | ✅ Hoàn thành |
 | 2 | Localization: dual EKF + navsat_transform | ✅ Hoàn thành |
 | 3 | Nav2 + Return-to-Home | ✅ Hoàn thành — `Successfully returned home!` |
-| 4 | AI Obstacle Avoidance (YOLOv8) | ⬜ Chưa bắt đầu |
+| 4 | AI Obstacle Avoidance (YOLOv8) | 🔧 Code xong, cần test |
 | 5 | Farm World + Integration Testing | ⬜ Chưa bắt đầu |
 
 ---
@@ -254,6 +254,74 @@ colcon build --packages-select agri_robot --symlink-install
 **Khi nào KHÔNG cần rebuild (symlink-install):**
 - Sửa nội dung `.py` files hiện có
 - Sửa nội dung `.yaml` files hiện có (đã được install, sửa source là đủ nếu dùng --symlink-install)
+
+---
+
+## Phase 4 — AI Obstacle Avoidance (YOLOv8)
+
+### Files tạo ra
+| File | Mô tả |
+|---|---|
+| `agri_robot/ai_vision/__init__.py` | Package marker |
+| `agri_robot/ai_vision/yolo_obstacle_node.py` | ROS 2 node: RGB+depth sync → YOLOv8 → PointCloud2 |
+| `launch/ai_vision.launch.py` | Khởi động yolo_obstacle_node |
+
+### Pipeline
+```
+/camera/image_raw  ──┐
+                     ├─► ApproximateTimeSynchronizer
+/camera/depth/image_raw ┘         │
+                                  ▼
+                         YoloObstacleNode (yolov8n.pt)
+                                  │ PointCloud2
+                                  ▼
+                         /yolo_obstacles
+                                  │
+                                  ▼
+                    Nav2 ObstacleLayer (local_costmap)
+                                  │
+                                  ▼
+                         DWB Local Planner → tránh vật cản
+```
+
+### Topic thực tế
+- `/camera/image_raw` — RGB 15Hz từ `libgazebo_ros_camera.so` (type=camera)
+- `/camera/depth/image_raw` — Depth 10Hz từ `libgazebo_ros_camera.so` (type=depth, 32FC1)
+- `/camera/camera_info` — Camera intrinsics
+- `/yolo_obstacles` — PointCloud2, frame `camera_optical_frame`
+
+### Cấu hình nav2_params.yaml (obstacle layer)
+```yaml
+obstacle_layer:
+  plugin: "nav2_costmap_2d::ObstacleLayer"
+  observation_sources: yolo_sensor
+  yolo_sensor:
+    topic: /yolo_obstacles
+    data_type: "PointCloud2"
+    sensor_frame: "camera_optical_frame"
+    observation_persistence: 1.0
+    marking: True
+    clearing: True
+    obstacle_max_range: 5.0
+    obstacle_min_range: 0.3
+```
+
+### Cách test Phase 4
+```bash
+# Terminal 1–3: Gazebo + Localization + Nav2 (như trước)
+
+# Terminal 4 — AI Vision node
+source /opt/ros/humble/setup.bash && source ~/agri_robot_ws/install/setup.bash
+ros2 launch agri_robot ai_vision.launch.py
+
+# Terminal 5 — Verify detection
+ros2 topic echo /yolo_obstacles   # phải có data khi camera thấy vật cản
+
+# Spawn người trong Gazebo để test
+ros2 run gazebo_ros spawn_entity.py \
+  -database person_standing -entity test_person \
+  -x 2.0 -y 0.0 -z 0.0
+```
 
 ---
 
