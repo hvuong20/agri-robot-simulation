@@ -66,54 +66,55 @@ class YoloObstacleNode(Node):
         self.camera_info = msg
 
     def _images_cb(self, rgb_msg: Image, depth_msg: Image):
-        if self.camera_info is None or self.model is None:
+        if self.camera_info is None:
             return
-
-        rgb   = self.bridge.imgmsg_to_cv2(rgb_msg, 'bgr8')
-        depth = self.bridge.imgmsg_to_cv2(depth_msg, '32FC1')
-
-        fx = self.camera_info.k[0]
-        fy = self.camera_info.k[4]
-        cx = self.camera_info.k[2]
-        cy = self.camera_info.k[5]
 
         obstacle_pts = []
 
-        results = self.model(rgb, verbose=False, conf=0.4)
-        for result in results:
-            for box in result.boxes:
-                if int(box.cls[0]) not in OBSTACLE_CLASSES:
-                    continue
+        if self.model is not None:
+            rgb   = self.bridge.imgmsg_to_cv2(rgb_msg, 'bgr8')
+            depth = self.bridge.imgmsg_to_cv2(depth_msg, '32FC1')
 
-                x1, y1, x2, y2 = map(int, box.xyxy[0])
-                u = (x1 + x2) // 2
-                v = (y1 + y2) // 2
+            fx = self.camera_info.k[0]
+            fy = self.camera_info.k[4]
+            cx = self.camera_info.k[2]
+            cy = self.camera_info.k[5]
 
-                h, w = depth.shape
-                patch = depth[
-                    max(0, v - DEPTH_PATCH_HALF): min(h, v + DEPTH_PATCH_HALF),
-                    max(0, u - DEPTH_PATCH_HALF): min(w, u + DEPTH_PATCH_HALF),
-                ]
-                valid = patch[np.isfinite(patch) & (patch > 0.1)]
-                if len(valid) == 0:
-                    continue
+            results = self.model(rgb, verbose=False, conf=0.4)
+            for result in results:
+                for box in result.boxes:
+                    if int(box.cls[0]) not in OBSTACLE_CLASSES:
+                        continue
 
-                d = float(np.median(valid))
-                if d > MAX_DETECT_DIST:
-                    continue
+                    x1, y1, x2, y2 = map(int, box.xyxy[0])
+                    u = (x1 + x2) // 2
+                    v = (y1 + y2) // 2
 
-                # pixel → 3-D point in camera_optical_frame
-                obs_x = (u - cx) * d / fx
-                obs_y = (v - cy) * d / fy
-                obs_z = d
-                obstacle_pts.append((obs_x, obs_y, obs_z))
+                    h, w = depth.shape
+                    patch = depth[
+                        max(0, v - DEPTH_PATCH_HALF): min(h, v + DEPTH_PATCH_HALF),
+                        max(0, u - DEPTH_PATCH_HALF): min(w, u + DEPTH_PATCH_HALF),
+                    ]
+                    valid = patch[np.isfinite(patch) & (patch > 0.1)]
+                    if len(valid) == 0:
+                        continue
 
-                label = result.names[int(box.cls[0])]
-                self.get_logger().info(
-                    f'Detected {label} at {d:.2f} m '
-                    f'(camera frame x={obs_x:.2f} y={obs_y:.2f} z={obs_z:.2f})'
-                )
+                    d = float(np.median(valid))
+                    if d > MAX_DETECT_DIST:
+                        continue
 
+                    obs_x = (u - cx) * d / fx
+                    obs_y = (v - cy) * d / fy
+                    obs_z = d
+                    obstacle_pts.append((obs_x, obs_y, obs_z))
+
+                    label = result.names[int(box.cls[0])]
+                    self.get_logger().info(
+                        f'Detected {label} at {d:.2f} m '
+                        f'(camera frame x={obs_x:.2f} y={obs_y:.2f} z={obs_z:.2f})'
+                    )
+
+        # Always publish (even empty) so Nav2 ObstacleLayer does not timeout
         self._pc_pub.publish(
             self._make_pointcloud(obstacle_pts, rgb_msg.header)
         )
@@ -123,7 +124,7 @@ class YoloObstacleNode(Node):
     def _make_pointcloud(self, points, header):
         msg = PointCloud2()
         msg.header = header
-        msg.header.frame_id = 'camera_optical_frame'
+        msg.header.frame_id = 'camera_optical_link'
         msg.height = 1
         msg.width = len(points)
         msg.fields = [

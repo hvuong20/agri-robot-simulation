@@ -137,7 +137,7 @@ local_costmap:
         yolo_sensor:
           topic: /yolo_obstacles
           data_type: "PointCloud2"
-          sensor_frame: "camera_optical_frame"
+          sensor_frame: "camera_optical_link"
           observation_persistence: 1.0
           expected_update_rate: 5.0
           marking: True
@@ -256,3 +256,4 @@ lifecycle_manager_navigation:
       - behavior_server
       - bt_navigator
       - waypoint_follower
+      - velocity_smoother
