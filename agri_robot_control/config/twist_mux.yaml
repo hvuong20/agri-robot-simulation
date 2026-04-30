@@ -1,0 +1,25 @@
+# twist_mux.yaml
+# Priority routing: highest number wins.
+# ESTOP is NOT enforced here — motor_driver_node is the ESTOP guardian.
+
+twist_mux:
+  ros__parameters:
+    topics:
+      # RC teleop — highest priority (operator override)
+      rc_teleop:
+        topic:    /cmd_vel_teleop
+        timeout:  0.5
+        priority: 20
+
+      # Autonomous navigation (GPS navigator + follow mode)
+      auto:
+        topic:    /cmd_vel_auto
+        timeout:  0.5
+        priority: 5
+
+    locks:
+      # ESTOP lock — disables all cmd_vel when active
+      estop:
+        topic:    /estop_trigger
+        timeout:  0.0    # never times out on its own — cleared by /estop_clear
+        priority: 255

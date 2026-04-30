@@ -1,0 +1,70 @@
+# hardware_params.yaml — Raspberry Pi 3 GPIO + RC channel mapping
+#
+# Copy this file to the Pi and adjust to match your wiring.
+# All GPIO numbers are BCM (Broadcom) numbering, NOT physical pin numbers.
+#
+# RC channel values: 1000 µs (min) … 1500 µs (centre) … 2000 µs (max)
+# L298N wiring assumed — see motor_driver_node.py header for pin table.
+
+/**:
+  ros__parameters:
+
+    # ── RC Receiver ─────────────────────────────────────────────────────────
+    rc:
+      # Protocol: 'ibus' | 'sbus' | 'ppm' | 'mock'
+      # Start with 'mock' on the desktop; switch to your actual protocol on Pi.
+      protocol: mock
+
+      # Serial port for iBUS / SBUS (disable Bluetooth first on Pi 3:
+      #   add 'dtoverlay=disable-bt' to /boot/config.txt and reboot)
+      port: /dev/serial0
+      baud: 115200          # iBUS: 115200 | SBUS: 100000
+
+      # PPM only — GPIO BCM pin connected to RC receiver PPM output
+      gpio_pin: 4
+
+      # Polling rate (Hz) — how often we read and publish RC channels
+      poll_rate_hz: 50.0
+
+      # Channel assignments (1-based, match your RC transmitter)
+      ch_throttle:     2    # right stick vertical   → linear.x
+      ch_steering:     1    # right stick horizontal → angular.z
+      ch_mode:         5    # 3-position switch (LOW=MANUAL, MID=AUTO, HIGH=FOLLOW)
+      ch_estop:        6    # 2-position switch (LOW = ESTOP active)
+      ch_boundary_btn: 7    # momentary push button (rising edge = record waypoint)
+
+      # Deadband: ignore stick drift within ±N µs of centre (1500 µs)
+      deadband_us: 30
+
+      # Velocity scaling
+      max_linear_vel:  1.5  # m/s  — full stick forward/back
+      max_angular_vel: 1.0  # rad/s — full stick left/right
+
+    # ── Motor Driver ─────────────────────────────────────────────────────────
+    motor:
+      # Driver: 'l298n' | 'mock'
+      # Use 'mock' on desktop; switch to 'l298n' on Pi with real hardware.
+      driver: mock
+
+      # L298N GPIO pin mapping (BCM numbers)
+      # Hardware PWM pins on Pi 3: GPIO 12 (PWM0) and GPIO 13 (PWM1)
+      left_en:   12    # ENA — PWM enable for left motor
+      left_in1:  23    # IN1
+      left_in2:  24    # IN2
+      right_en:  13    # ENB — PWM enable for right motor
+      right_in1: 27    # IN3
+      right_in2: 22    # IN4
+
+      # Robot physical parameters (measure from your robot)
+      wheel_base:   0.35   # metres — distance between left/right wheel contact patches
+      wheel_radius: 0.07   # metres
+
+      # Speed limits (must match rc.max_linear_vel for consistent feel)
+      max_speed:   1.5   # m/s  — clips /cmd_vel_mux linear.x before PWM mapping
+      max_angular: 1.0   # rad/s — clips angular.z
+
+      # Safety: stop motors if no /cmd_vel_mux received within this interval
+      cmd_timeout_s: 0.5
+
+      # Status topic publish rate
+      status_rate_hz: 5.0

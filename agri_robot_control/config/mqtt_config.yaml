@@ -1,0 +1,17 @@
+# mqtt_config.yaml — MQTT broker configuration for mqtt_bridge_node
+
+/**:
+  ros__parameters:
+    mqtt:
+      # Broker running on Pi itself (Mosquitto)
+      # For remote access via Cloudflare Tunnel, keep this as 'localhost'
+      # and expose port 1883 through cloudflared.
+      broker_host: localhost
+      broker_port: 1883
+      keepalive_s: 60
+      client_id:   agri_robot_pi
+      reconnect_s: 5.0
+
+      # Telemetry publish rates
+      position_hz: 10.0   # robot/position  (lat/lon/heading/mode)
+      status_hz:    1.0   # robot/status    (mode/gps_fix/stuck/boundary)

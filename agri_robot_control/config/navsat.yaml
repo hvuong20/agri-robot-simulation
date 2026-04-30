@@ -1,0 +1,26 @@
+# navsat.yaml — navsat_transform_node configuration
+# Converts GPS fixes to /odometry/gps in the map frame.
+#
+# IMPORTANT: Update datum_lat / datum_lon to match your actual field location.
+# Run once stationary for 60s before starting AUTO mode to let EKF converge.
+
+navsat_transform_node:
+  ros__parameters:
+    frequency: 10.0
+    delay:     3.0         # wait for EKF to initialise before accepting GPS
+
+    magnetic_declination_radians: 0.0   # set for your location (Vietnam ≈ -0.03 rad)
+    yaw_offset: 0.0                     # offset if robot URDF x-axis ≠ geographic East
+
+    zero_altitude: true                 # ignore GPS altitude (2D navigation)
+    broadcast_utm_transform: false
+    publish_filtered_gps: true          # publishes /gps/filtered
+
+    use_odometry_yaw: false             # use IMU/EKF yaw, not GPS course-over-ground
+    wait_for_datum: false
+
+    # Field datum — UPDATE THESE before deploying to a new field.
+    # Use the coordinates of a fixed reference point near the centre of the field.
+    datum_lat:  10.7769          # example: Ho Chi Minh City area
+    datum_lon: 106.7009
+    datum_yaw:  0.0

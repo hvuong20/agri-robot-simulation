@@ -1,0 +1,50 @@
+# control_params.yaml — Parameters for all agri_robot_control nodes
+
+/**:
+  ros__parameters:
+
+    # ── Mode Manager ────────────────────────────────────────────────────────
+    mode:
+      estop_require_mqtt_confirm: false   # true = need app ack before clearing ESTOP
+
+    # ── Boundary Manager ────────────────────────────────────────────────────
+    boundary:
+      save_path:           /home/pi/boundary.json
+      warn_margin_m:       2.0    # metres from edge → warning
+      violation_timeout_s: 5.0   # seconds outside before violation flag
+      check_rate_hz:       10.0
+      enforce_in_manual:   false  # skip enforcement when in MANUAL mode
+
+    # ── Coverage Planner ────────────────────────────────────────────────────
+    coverage:
+      row_offset_m: 3.0   # sweep row spacing (min 2.0m for GPS accuracy ~2.5m)
+      margin_m:     1.0   # inset from boundary edges
+
+    # ── GPS Navigator ────────────────────────────────────────────────────────
+    nav:
+      lookahead_m:     2.0
+      waypoint_tol_m:  1.5    # consider waypoint reached within this radius
+      max_linear_vel:  0.8    # m/s
+      max_angular_vel: 0.6    # rad/s
+      kp_angular:      1.2
+      goal_lat:        0.0    # set non-zero for single-point return-home
+      goal_lon:        0.0
+
+    # ── Follow Mode ──────────────────────────────────────────────────────────
+    follow:
+      distance_m:         5.0   # target follow distance
+      min_move_m:         0.5   # ignore target movements smaller than this
+      max_speed:          0.6   # m/s
+      max_angular:        0.6   # rad/s
+      kp_linear:          0.4
+      kp_angular:         1.0
+      position_timeout_s: 3.0   # stop if no phone GPS for this duration
+
+    # ── Stuck Detector ───────────────────────────────────────────────────────
+    stuck:
+      mismatch_duration_s: 3.0
+      cmd_vel_threshold:   0.05   # m/s — below this = "not commanded"
+      odom_vel_threshold:  0.03   # m/s — below this = "not moving"
+      gps_confirm_s:       3.0
+      gps_confirm_m:       0.5
+      check_rate_hz:       2.0
