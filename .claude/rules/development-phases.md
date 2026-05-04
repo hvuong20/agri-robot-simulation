@@ -1,270 +1,197 @@
 # Development Phases
 
-## Tổng quan
+## Simulation Phases (WSL2 + Gazebo)
 
-| Phase | Nội dung | Thời gian | Trạng thái |
-|---|---|---|---|
-| 0 | Cài đặt môi trường | 1–2 ngày | ✅ Hoàn thành |
-| 1 | Mô hình Robot (URDF) + Gazebo | 3–5 ngày | ✅ Hoàn thành |
-| 2 | Localization (GPS + IMU → EKF) | 3–4 ngày | ✅ Hoàn thành |
-| 3 | Nav2 Path Planning + Return-to-Home + Teleop | 3–4 ngày | ✅ Hoàn thành |
-| 4 | AI Obstacle Avoidance (YOLOv8) | 5–7 ngày | ⬜ Chưa bắt đầu |
-| 5 | Farm World + Integration Testing | 2–3 ngày | ⬜ Chưa bắt đầu |
-
-## Tiến độ Phase 0 ✅
-
-| Bước | Nội dung | Trạng thái |
+| Phase | Nội dung | Trạng thái |
 |---|---|---|
-| 0a | Cài WSL2 trên Windows 11 (build 26200) | ✅ Xong |
-| 0b | Cài Ubuntu 22.04.5 LTS qua MS Store | ✅ Xong |
-| 0c-1 | Thêm ROS 2 apt repository (`ros.asc`) | ✅ Xong |
-| 0c-2 | Cài ROS 2 Humble Desktop | ✅ Xong |
-| 0c-3 | Auto-source `~/.bashrc` | ✅ Xong |
-| 0c-4 | Cài Gazebo Classic 11 + Nav2 + tools | ✅ Xong |
-| 0d | Cài Python AI tools (YOLOv8, torch) | ✅ Xong |
-| 0e | Verify Turtlebot3 simulation | ✅ Xong — robot di chuyển được bằng teleop |
+| 0 | Cài đặt môi trường | ✅ Xong |
+| 1 | URDF + Gazebo | ✅ Xong |
+| 2 | Localization (Dual EKF) | ✅ Xong |
+| 3 | Nav2 + Return-to-Home + Teleop | ✅ Xong |
+| 4 | AI Obstacle Avoidance (YOLOv8 + depth camera) | 🔧 Code xong — cần test Gazebo |
+| 5 | Farm World + Integration Testing | ⬜ Chưa bắt đầu |
+
+## Real Hardware Phases (Raspberry Pi 3 + Flutter App)
+
+| Phase | Nội dung | Trạng thái |
+|---|---|---|
+| A | Hardware Drivers (RC + Motor PWM + ESTOP) | ✅ Xong |
+| B | Localization configs cho real hardware | ✅ Xong (trong agri_robot_control/config) |
+| C | Mode Manager + MQTT Bridge + Flutter App MVP | ⬜ **Tiếp theo** |
+| D | Boundary Manager + Coverage Planner + App Boundary Editor | ⬜ |
+| E | Follow Mode + Stuck Detector + App Follow UI | ⬜ |
+| F | Integration + Cloudflare Tunnel + Polish | ⬜ |
 
 ---
 
-## Phase 0 — Cài đặt môi trường (Windows + WSL2)
-
-### Bước 0a — Cài WSL2 (chạy trong PowerShell với quyền Admin)
-
-```powershell
-# Mở PowerShell as Administrator, chạy:
-wsl --install -d Ubuntu-22.04
-
-# Khởi động lại máy khi được yêu cầu
-# Sau đó mở "Ubuntu 22.04" từ Start Menu → tạo username + password
-```
-
-> **Windows 11** đã có WSLg tích hợp sẵn — Gazebo và RViz2 hiển thị cửa sổ GUI tự động, không cần cài thêm X server.
-
-### Bước 0b — Cài VS Code + Remote WSL (trên Windows)
-
-```
-1. Tải VS Code: code.visualstudio.com
-2. Mở VS Code → Extensions → tìm "WSL" → cài "Remote - WSL" (Microsoft)
-3. Nhấn F1 → "WSL: Connect to WSL" → VS Code kết nối vào Ubuntu
-4. Mọi terminal trong VS Code giờ chạy trong WSL2
-```
-
-### Bước 0c — Cài ROS 2 + Tools (chạy trong WSL2 Ubuntu terminal)
-
-> ⚠️ **Quan trọng:** URL `ros.key` (binary) đã bị 404 từ 2024. Phải dùng `ros.asc` (ASCII armored)
-> + `wget` + `gpg --dearmor`. KHÔNG dùng `curl ros.key` như tutorial cũ.
-
-```bash
-# 1. Cài prerequisites
-sudo apt update && sudo apt install -y wget gnupg2 software-properties-common
-
-# 2. Thêm ROS 2 GPG key (PHẢI dùng ros.asc, không phải ros.key)
-wget -qO- https://raw.githubusercontent.com/ros/rosdistro/master/ros.asc \
-  | sudo gpg --dearmor -o /usr/share/keyrings/ros-archive-keyring.gpg
-
-# 3. Thêm repository vào sources list
-echo "deb [arch=amd64 signed-by=/usr/share/keyrings/ros-archive-keyring.gpg] \
-  http://packages.ros.org/ros2/ubuntu jammy main" \
-  | sudo tee /etc/apt/sources.list.d/ros2.list
-
-# 4. Verify repository đã thêm thành công
-cat /etc/apt/sources.list.d/ros2.list   # phải thấy dòng "deb [arch=amd64..."
-
-# 5. Cài ROS 2 Humble Desktop (~5-15 phút)
-sudo apt update && sudo apt install -y ros-humble-desktop
-
-# 6. Cài Gazebo Harmonic + ROS bridge
-sudo apt install -y ros-humble-ros-gz
-
-# 7. Cài Nav2 + localization
-sudo apt install -y ros-humble-navigation2 ros-humble-nav2-bringup
-sudo apt install -y ros-humble-robot-localization
-sudo apt install -y ros-humble-joint-state-publisher-gui
-sudo apt install -y ros-humble-xacro ros-humble-teleop-twist-keyboard
-
-# 8. Python AI tools
-pip3 install ultralytics opencv-python torch torchvision numpy
-
-# 9. Thêm vào ~/.bashrc để tự source mỗi lần mở terminal
-echo "source /opt/ros/humble/setup.bash" >> ~/.bashrc
-source ~/.bashrc
-```
-
-**Verify (LƯU Ý: `ros2 --version` KHÔNG hoạt động — không có flag này):**
-
-```bash
-echo $ROS_DISTRO              # → humble
-ros2 pkg list | head -5       # → liệt kê 5 packages đầu tiên
-ros2 doctor --report | head   # → bảng platform info
-gz sim --version              # → Gazebo Harmonic version
-```
-
-### Bước 0d — Đặt project files trong WSL2
-
-```bash
-# Code để trong WSL2 filesystem (nhanh hơn /mnt/c/ rất nhiều)
-mkdir -p ~/agri_robot_ws/src
-cd ~/agri_robot_ws/src
-
-# Clone hoặc symlink project
-# (nếu muốn giữ files trên Windows: /mnt/c/Claude_project/Agri_Robot_Simulation)
-# Khuyến nghị: làm việc trong ~/agri_robot_ws/ để tránh I/O chậm
-```
-
-> **Lưu ý quan trọng:** Đặt code trong `~/` (WSL2 filesystem) thay vì `/mnt/c/` (Windows drive).
-> Truy cập `/mnt/c/` có I/O chậm hơn 10-20x so với filesystem nội bộ của WSL2.
-
-### Bước 0e — Chạy thử Turtlebot3 (kiểm tra toàn bộ pipeline) ✅
-
-```bash
-# Cài Turtlebot3 packages (quan trọng: cần cả 2 packages này)
-sudo apt install -y ros-humble-turtlebot3 ros-humble-turtlebot3-gazebo
-
-# Cài Gazebo Classic bridge (dùng libgazebo_ros_pkgs, KHÔNG phải ros-gz)
-sudo apt install -y ros-humble-gazebo-ros-pkgs ros-humble-gazebo-ros2-control
-
-# Source Gazebo environment
-echo "source /usr/share/gazebo/setup.sh" >> ~/.bashrc
-
-# QUAN TRỌNG: phải set model trước khi launch
-echo "export TURTLEBOT3_MODEL=burger" >> ~/.bashrc
-source ~/.bashrc
-```
-
-**Terminal 1 — Khởi động Gazebo:**
-```bash
-export TURTLEBOT3_MODEL=burger
-ros2 launch turtlebot3_gazebo turtlebot3_world.launch.py
-# → Cửa sổ Gazebo xuất hiện trên Windows
-# → Nhìn panel trái, double-click "burger" để camera tìm robot
-```
-
-**Terminal 2 — Điều khiển bàn phím:**
-```bash
-ros2 run teleop_twist_keyboard teleop_twist_keyboard
-# → Click vào terminal này trước khi bấm phím!
-```
-
-**Phím điều khiển Turtlebot3:**
-```
-   i    ← Tiến thẳng
-j  k  l ← Quay trái | Dừng | Quay phải
-   ,    ← Lùi
-q / z   ← Tăng / giảm tốc độ
-```
-
-> ⚠️ **Lưu ý thực tế đã gặp:**
-> - Nếu `echo $TURTLEBOT3_MODEL` trống → robot không spawn đúng, phải `export TURTLEBOT3_MODEL=burger` rồi restart
-> - Gazebo có thể khởi động ở trạng thái **Pause** → nhấn nút ▶ Play ở thanh dưới
-> - Teleop phải **click trực tiếp vào terminal** trước khi bấm phím mới có tác dụng
-> - Robot trong Gazebo rất nhỏ — dùng scroll wheel zoom in để thấy
-
----
-
-## Phase 1 — Mô hình Robot (URDF) ✅
-
-**Mục tiêu:** Robot 4 bánh xuất hiện trong Gazebo, di chuyển được bằng teleop
+## Phase A — Hardware Drivers ✅
 
 **Files đã tạo:**
-- `agri_robot/urdf/agri_robot.urdf.xacro` — chassis 0.80×0.55×0.20m, 4 bánh, camera, IMU, GPS
-- `agri_robot/config/controllers.yaml` — drive geometry reference
-- `agri_robot/launch/gazebo.launch.py` — Gazebo Classic 11 launch
-- `agri_robot/worlds/empty_field.sdf` — đồng cỏ phẳng + GPS coordinates
+- `agri_robot_hardware/agri_robot_hardware/drivers/rc_protocol.py`
+  - `RCProtocolDriver` ABC + `IBUSDriver` + `SBUSDriver` + `PPMDriver` + `MockRCDriver`
+  - Factory `create_driver(protocol, **kwargs)`
+- `agri_robot_hardware/agri_robot_hardware/rc_interface_node.py`
+  - Đọc RC channels, map → `/cmd_vel_teleop` (Twist), `/rc/mode_switch` (Int8),
+    `/estop_trigger` (Empty), `/estop_clear` (Empty), `/rc/boundary_btn` (Empty)
+  - Deadband ±30µs, edge detection ESTOP + boundary button
+- `agri_robot_hardware/agri_robot_hardware/drivers/pwm_motor.py`
+  - `L298NDriver` (RPi.GPIO, software PWM 1kHz) + `MockPWMMotor`
+  - Factory `create_motor_driver(config)`
+- `agri_robot_hardware/agri_robot_hardware/motor_driver_node.py`
+  - Subscribe `/cmd_vel_mux` → differential mixing → L298N GPIO PWM
+  - **ESTOP guardian**: subscribe `/estop_trigger` → `motor.brake()` ngay lập tức (bypass twist_mux)
+  - Watchdog 0.5s: stop nếu không có cmd_vel
+  - Dead-reckoning odometry → publish `/odom`
+  - Publish `/motor/status` (JSON)
+- `agri_robot_hardware/config/hardware_params.yaml` — default `mock`, đổi `l298n`/`ibus` trên Pi
+- `agri_robot_hardware/launch/hardware.launch.py`
 
-**Kết quả verify ✅:**
-- Robot xanh 4 bánh xuất hiện trong Gazebo
-- `/odom`, `/cmd_vel`, `/joint_states`, `/imu/data`, `/gps/fix` đều có
-- Teleop: tiến/lùi + quay trái/phải hoạt động
-
-**Gotchas đã gặp:**
-- Plugin `libgazebo_ros_diff_drive.so` cần `<ros/>` tag để khởi tạo ROS 2 node
-- Multi `<left_joint>` repeat không hoạt động — dùng 1 joint/bên cho Phase 1
-- Phải tăng angular speed bằng `E` trong teleop để quay rõ ràng
-
----
-
-## Phase 2 — Localization (GPS + IMU → EKF) ✅
-
-**Mục tiêu:** Robot biết vị trí của mình (lat/lon → x/y/z trong map frame)
-
-**Files đã tạo:**
-- `agri_robot/config/ekf_local.yaml` — Local EKF: `/odom` + `/imu/data` → `/odometry/local`
-- `agri_robot/config/ekf_global.yaml` — Global EKF: `/odometry/local` + `/odometry/gps` → `/odometry/global`
-- `agri_robot/config/navsat.yaml` — navsat_transform: GPS lat/lon → `/odometry/gps`
-- `agri_robot/launch/localization.launch.py`
-
-**Kết quả verify ✅:**
-- `/odometry/global` có data trong `frame_id: map`
-- TF `map → odom → base_link` hoạt động
-
-**Gotchas:** Xem `.claude/memory.md` phần "Dual EKF" và lỗi `/odometry/global` bị treo.
+**Verify trên Pi:**
+```bash
+ros2 launch agri_robot_hardware hardware.launch.py protocol:=ibus motor_driver:=l298n
+ros2 topic echo /cmd_vel_teleop      # RC sticks → Twist messages
+ros2 topic echo /estop_trigger       # CH6 xuống LOW → Empty message
+ros2 topic echo /motor/status        # JSON {left, right, estop}
+```
 
 ---
 
-## Phase 3 — Nav2 + Return-to-Home + Teleop ✅
+## Phase B — Localization Configs ✅
 
-**Mục tiêu:** Robot nhận waypoint, tự di chuyển đến đích, và tự về home. Teleop hoạt động song song với Nav2.
+**Files đã tạo trong `agri_robot_control/config/`:**
+- `ekf_local.yaml` — `/odom` + `/imu/data` → `/odometry/local` (30 Hz)
+- `ekf_global.yaml` — `/odometry/local` + `/odometry/gps` → `/odometry/global` (10 Hz)
+- `navsat.yaml` — GPS → `/odometry/gps` + `/gps/filtered`
+  - **Phải update `datum_lat`/`datum_lon`** cho field thực tế trước deploy
+  - `use_odometry_yaw: false` — dùng IMU/EKF yaw (không dùng GPS track direction)
+- `agri_robot_control/launch/localization.launch.py` — GPS driver + 2 EKF + navsat
 
-**Files đã tạo:**
-- `agri_robot/config/nav2_params.yaml` — Nav2 full config (GPS-based, rolling costmap, no static map)
-- `agri_robot/config/navigate_to_pose_bt.xml` — Custom BT XML (bỏ RemovePassedGoals, error_code_id)
-- `agri_robot/config/navigate_through_poses_bt.xml` — Custom BT XML cho through_poses
-- `agri_robot/config/twist_mux.yaml` — Priority routing: teleop(10) > Nav2(1) → /cmd_vel_mux
-- `agri_robot/launch/navigation.launch.py`
-- `agri_robot/launch/gazebo.launch.py` — thêm twist_mux node
-- `agri_robot/agri_robot/navigation/return_home.py`
-
-**Kết quả verify ✅:**
-- `ros2 run agri_robot return_home` → "Successfully returned home!"
-- Teleop: `ros2 run teleop_twist_keyboard teleop_twist_keyboard --ros-args -r /cmd_vel:=/cmd_vel_teleop` → robot chạy
-
-**Gotchas:** Xem `.claude/memory.md` phần lỗi BT XML, `waitUntilNav2Active()`, và twist_mux.
+**Verify trên Pi:**
+```bash
+ros2 launch agri_robot_control localization.launch.py gps_port:=/dev/ttyACM0
+ros2 topic hz /odometry/global       # → ~10 Hz sau 60s warm-up
+ros2 topic echo /gps/fix             # → lat/lon từ GPS hardware
+```
 
 ---
 
-## Phase 4 — AI Obstacle Avoidance
+## Phase C — Mode Manager + MQTT + Flutter App MVP ⬜ (Tiếp theo)
 
-**Mục tiêu:** Phát hiện vật cản bằng YOLOv8 + depth cam, Nav2 tự tránh
+**Goal:** App hiển thị robot position trên OSM map, ESTOP button hoạt động, mode switch.
 
 **Files cần tạo:**
-- `agri_robot/scripts/ai_vision/yolo_detector.py` — ROS 2 node YOLOv8
-- `agri_robot/scripts/ai_vision/obstacle_publisher.py` — publish vị trí vật cản
-- `agri_robot/config/nav2_params.yaml` — thêm obstacle layer vào costmap
 
-**Verification:**
+ROS 2 (đã có code, cần test):
+- `agri_robot_control/agri_robot_control/mode_manager_node.py` ✅
+- `agri_robot_control/agri_robot_control/mqtt_bridge_node.py` ✅
+
+Flutter app (chưa tạo) — `agri_robot_app/`:
+- `pubspec.yaml` — flutter_map, mqtt_client, geolocator, latlong2, provider
+- `lib/main.dart`
+- `lib/services/mqtt_service.dart` — paho MQTT over WiFi/5G
+- `lib/services/location_service.dart` — phone GPS
+- `lib/screens/map_screen.dart` — OSM map + robot marker + heading arrow
+- `lib/screens/control_screen.dart` — mode selector + status
+- `lib/widgets/emergency_stop_btn.dart` — prominent red FAB
+
+**Verify:**
 ```bash
-ros2 run agri_robot yolo_detector
-# → Topic /detected_obstacles có data khi camera thấy người/vật
-# Spawn model người trong Gazebo → robot tránh tự động
+# Pi: start full system (mock mode for desktop test)
+ros2 launch agri_robot_control full_system.launch.py
+
+# App: connect MQTT → robot/position xuất hiện trên map
+# App: nhấn ESTOP → /estop_trigger xuất hiện trong ros2 topic echo
 ```
 
 ---
 
-## Phase 5 — Farm World + Integration Testing
+## Phase D — Boundary + Coverage ⬜
 
-**Mục tiêu:** Test toàn bộ hệ thống trong môi trường đồng ruộng thực tế
+**Goal:** Robot tự chạy lawnmower pattern trong GPS boundary.
 
-**Files cần tạo:**
-- `agri_robot/worlds/farm_field.sdf` — đồng ruộng có hàng cây, địa hình gồ ghề
-- `agri_robot/launch/full_demo.launch.py` — launch tất cả cùng lúc
+**Nodes đã viết (cần test):**
+- `boundary_manager_node.py` ✅ — GPS polygon, RC-walk recording, violation enforcement
+- `coverage_planner_node.py` ✅ — boustrophedon algorithm, configurable row_offset
+- `gps_navigator_node.py` ✅ — pure-pursuit, 10 Hz control loop, 1.5m waypoint tolerance
 
-**Test scenarios:**
-1. A → B → return-to-home tự động
-2. Vật cản tĩnh (cây, cột) → nav tránh
-3. Vật cản động (người đi lại) → AI detect + tránh
-4. GPS signal loss → robot dừng, chờ signal
+**Flutter:**
+- `lib/screens/boundary_editor.dart` — tap map → add waypoint, draw polygon, send to Pi
 
 ---
 
-## Lộ trình Học (Người mới bắt đầu)
+## Phase E — Follow Mode + Stuck Detection ⬜
 
-| Tuần | Nội dung học |
-|---|---|
-| 1 | ROS 2 concepts: node, topic, service, action. Chạy examples |
-| 2 | URDF + RViz2: tạo robot đơn giản, xem joints |
-| 3 | Gazebo + teleop: robot di chuyển trong simulator |
-| 4 | Nav2 basics: autonomous navigation với map có sẵn |
-| 5 | GPS + robot_localization: outdoor navigation |
-| 6 | YOLOv8: chạy detection trên camera feed |
-| 7 | Tích hợp AI + Nav2: obstacle avoidance hoàn chỉnh |
-| 8 | Full demo + testing tất cả scenarios |
+**Goal:** Robot đi theo điện thoại. Stuck alert qua app.
+
+**Nodes đã viết (cần test):**
+- `follow_mode_node.py` ✅ — phone GPS, 0.5m hysteresis, 3s GPS timeout
+- `stuck_detector_node.py` ✅ — Layer 1: cmd_vel/odom mismatch, Layer 2: GPS confirm
+
+**Flutter:**
+- Follow mode UI + notification khi stuck
+
+---
+
+## Phase F — Integration + Polish ⬜
+
+- Full system test tất cả modes
+- Tune pure-pursuit PID gains
+- Cloudflare Tunnel setup (`cloudflared service install`)
+- MQTT reconnect handling trên app
+- Battery low alert
+
+---
+
+## Simulation — Phase 4 AI Obstacle Avoidance 🔧
+
+**Code đã viết:**
+- `agri_robot/agri_robot/ai_vision/yolo_obstacle_node.py` — RGB+depth sync → YOLOv8 → PointCloud2 `/yolo_obstacles`
+- `agri_robot/launch/ai_vision.launch.py`
+- `agri_robot/urdf/agri_robot.urdf.xacro` — depth camera sensor added (`libgazebo_ros_camera.so`, type=depth)
+- `agri_robot/config/nav2_params.yaml` — ObstacleLayer với `sensor_frame: "camera_optical_link"`
+
+**Bugs đã fix:**
+- BUG-001: `frame_id = 'camera_optical_link'` (was `camera_optical_frame`)
+- BUG-002: `_images_cb` luôn publish PointCloud2 dù model=None
+- BUG-003: Xóa `<format>` tag khỏi depth sensor (Gazebo tự set 32FC1)
+- BUG-004: Thêm `velocity_smoother` vào `lifecycle_manager_navigation.node_names`
+
+**Cần test:**
+```bash
+# Start hệ thống như bình thường, thêm terminal 4:
+ros2 launch agri_robot ai_vision.launch.py
+ros2 topic hz /yolo_obstacles     # phải có data khi camera thấy vật cản
+# Spawn người trong Gazebo, verify robot tránh
+```
+
+---
+
+## Restart Workflow (Simulation)
+
+Claude Code không thể start Gazebo (cần DISPLAY). User phải start thủ công:
+
+```bash
+# Terminal 1 — Gazebo
+ros2 launch agri_robot gazebo.launch.py
+
+# Terminal 2 — Localization
+ros2 launch agri_robot localization.launch.py
+
+# Terminal 3 — Nav2
+ros2 launch agri_robot navigation.launch.py
+
+# Terminal 4 — Test
+ros2 run agri_robot return_home
+```
+
+## Restart Workflow (Real Hardware on Pi)
+
+```bash
+# Single command bringup
+ros2 launch agri_robot_control full_system.launch.py protocol:=ibus motor_driver:=l298n gps_port:=/dev/ttyACM0
+
+# Debug individual nodes
+ros2 launch agri_robot_hardware hardware.launch.py    # RC + motors only
+ros2 launch agri_robot_control localization.launch.py # GPS + EKF only
+ros2 launch agri_robot_control navigation.launch.py   # Control nodes only
+```

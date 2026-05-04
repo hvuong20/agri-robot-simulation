@@ -6,14 +6,27 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 
 ## Trạng thái Phase (cập nhật 2026-04-30)
 
+### Simulation (WSL2 + Gazebo)
+
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
 | 0 | Cài WSL2 + ROS 2 Humble + Gazebo Classic 11 | ✅ Hoàn thành |
 | 1 | URDF robot 2-motor skid-steer (4 bánh) + Gazebo launch + teleop + twist_mux | ✅ Hoàn thành |
 | 2 | Localization: dual EKF + navsat_transform | ✅ Hoàn thành |
 | 3 | Nav2 + Return-to-Home | ✅ Hoàn thành — `Successfully returned home!` |
-| 4 | AI Obstacle Avoidance (YOLOv8) | 🔧 Code xong, cần test |
+| 4 | AI Obstacle Avoidance (YOLOv8) | 🔧 Code xong, cần test Gazebo |
 | 5 | Farm World + Integration Testing | ⬜ Chưa bắt đầu |
+
+### Real Hardware + App (Raspberry Pi 3 + Flutter)
+
+| Phase | Nội dung | Trạng thái |
+|---|---|---|
+| A | Hardware Drivers (RC + Motor PWM + ESTOP guardian) | ✅ Hoàn thành |
+| B | Localization configs cho real hardware (EKF, navsat, no sim_time) | ✅ Hoàn thành |
+| C | Mode Manager + MQTT Bridge + Flutter App MVP | ⬜ Tiếp theo |
+| D | Boundary Manager + Coverage Planner | ⬜ |
+| E | Follow Mode + Stuck Detector | ⬜ |
+| F | Integration + Cloudflare Tunnel + Polish | ⬜ |
 
 ---
 
@@ -325,9 +338,10 @@ ros2 run gazebo_ros spawn_entity.py \
 
 ---
 
-## Git commits Phase 3
+## Git commits Phase 3 + Hardware
 
 ```
+0d90c09 feat(Phase A+B): add hardware drivers + control stack for Raspberry Pi 3
 d178015 fix: load custom BT XML directly from nav2_params
 9ba6e52 fix: rename local EKF output to /odometry/local
 b88f530 fix: delay spawn_entity by 10s to wait for Gazebo
@@ -335,3 +349,75 @@ b88f530 fix: delay spawn_entity by 10s to wait for Gazebo
 d3bb45a fix: add use_sim_time=true to all localization nodes
 c0a6c84 fix: replace openni_kinect depth plugin
 ```
+
+---
+
+## Real Hardware — Packages đã tạo (Phase A+B)
+
+### agri_robot_hardware — GPIO + RC drivers
+
+**RC Protocol driver** (`drivers/rc_protocol.py`):
+- Abstract base `RCProtocolDriver`: `open()`, `read_channels() → dict[int,int]|None`, `is_connected()`, `close()`
+- `IBUSDriver`: 115200 baud, 32-byte frame `[0x20 0x40 + 28 bytes + 2 byte checksum]`, channels 1–14
+- `SBUSDriver`: 100000 baud, 8E2 inverted UART, 11-bit packed channels. Pi 3 cần hardware inverter
+- `PPMDriver`: pigpio GPIO interrupt, sync gap > 2500µs
+- `MockRCDriver`: `set_channel(ch, value)` để test không cần hardware
+- `create_driver(protocol, **kwargs)` factory
+
+**rc_interface_node**: poll `rc.poll_rate_hz` (default 50 Hz), publish:
+- `/cmd_vel_teleop` (Twist): CH2=throttle, CH1=steering, deadband ±30µs
+- `/rc/mode_switch` (Int8): CH5 → 0=MANUAL/1=AUTO/2=FOLLOW
+- `/estop_trigger` (Empty): CH6 falls below 1300µs → rising edge
+- `/estop_clear` (Empty): CH6 returns above 1300µs → falling edge
+- `/rc/boundary_btn` (Empty): CH7 rising edge
+
+**PWM Motor driver** (`drivers/pwm_motor.py`):
+- `L298NDriver`: RPi.GPIO, software PWM 1kHz, 6 GPIO pins (left_en/in1/in2 + right_en/in1/in2)
+- `MockPWMMotor`: stores last commanded speeds, `is_braking` flag
+- `create_motor_driver(config)` factory
+
+**motor_driver_node**:
+- Subscribe `/cmd_vel_mux` → differential mixing (v_left = v - ω*L/2)
+- **ESTOP**: subscribe `/estop_trigger` → `motor.brake()` NGAY LẬP TỨC (không qua twist_mux)
+- Watchdog: stop nếu không có cmd_vel trong `motor.cmd_timeout_s` (default 0.5s)
+- Dead-reckoning odom: `x += v*cos(yaw)*dt`, đủ dùng khi chưa có encoder
+- Fallback to `MockPWMMotor` nếu GPIO setup lỗi
+
+**config/hardware_params.yaml** — tất cả default `mock`, switch to real khi deploy:
+```yaml
+rc.protocol: mock          # → ibus / sbus / ppm
+motor.driver: mock         # → l298n
+motor.left_en: 12          # GPIO BCM (HW PWM0)
+motor.right_en: 13         # GPIO BCM (HW PWM1)
+```
+
+### agri_robot_control — Navigation + App Bridge
+
+**Nodes:**
+| Node | Chức năng |
+|---|---|
+| `mode_manager_node` | MANUAL/AUTO/FOLLOW/ESTOP state machine. ESTOP sticky — RC + optional MQTT ack |
+| `boundary_manager_node` | GPS polygon, RC-walk recording (CH7 button), app boundary, violation enforcement (10 Hz) |
+| `coverage_planner_node` | Boustrophedon path: rotate polygon to longest edge, sweep rows at `row_offset_m` |
+| `gps_navigator_node` | Pure-pursuit, 10 Hz. Heading từ EKF yaw (convert ROS yaw → geographic bearing) |
+| `follow_mode_node` | Phone GPS follow, 0.5m hysteresis, 3s timeout. Phase 4: camera person tracking |
+| `mqtt_bridge_node` | paho-mqtt, auto-reconnect thread, QoS routing. ESTOP QoS 2 |
+| `stuck_detector_node` | Layer 1: cmd_vel vs /odom velocity. Layer 2: GPS drift < 0.5m over 3s |
+
+**Topic wiring:**
+```
+RC CH1/CH2 → rc_interface_node → /cmd_vel_teleop (p20) ─┐
+                                                         ├─ twist_mux → /cmd_vel_mux → motor_driver_node → GPIO
+gps_navigator / follow_mode → /cmd_vel_auto (p5) ────────┘
+                                                                            ↑
+RC CH6 → /estop_trigger ────────────────────────────────────────────────────┘ (bypass twist_mux)
+
+mode_manager_node publishes /current_mode → gps_navigator, follow_mode, boundary_manager gating
+```
+
+**Deploy lên Pi:**
+1. Sửa `hardware_params.yaml`: đổi `protocol: ibus` (hoặc sbus/ppm), `driver: l298n`
+2. Sửa `navsat.yaml`: cập nhật `datum_lat`, `datum_lon` cho field thực tế
+3. Disable Bluetooth: thêm `dtoverlay=disable-bt` vào `/boot/config.txt`, reboot
+4. Cài dependencies Pi: `pip3 install RPi.GPIO pyserial paho-mqtt`
+5. `ros2 launch agri_robot_control full_system.launch.py protocol:=ibus motor_driver:=l298n`

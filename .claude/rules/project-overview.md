@@ -1,46 +1,34 @@
-# Agri Robot Simulation — Project Overview
+# Agri Robot — Project Overview
 
-**Agri Robot** là hệ thống mô phỏng robot nông nghiệp 4WD tự hành, được xây dựng bằng
-ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
+**Agri Robot** là hệ thống robot nông nghiệp 4WD tự hành. Dự án gồm 2 phần song song:
+1. **Simulation** — Gazebo Classic 11 + ROS 2 + Nav2 (Phases 0–5, chạy trên WSL2)
+2. **Real Hardware + Android App** — Raspberry Pi 3 + Flutter (Phases A–F, đang triển khai)
 
-## Mục tiêu
+## Tech Stack — Simulation
 
-| Tính năng | Mô tả |
+| Layer | Công nghệ |
 |---|---|
-| **4WD Skid-Steer** | 4 động cơ độc lập, điều khiển từng bánh riêng lẻ |
-| **Return-to-Home** | Lưu GPS home khi khởi động, tự lái về sau khi hoàn thành nhiệm vụ |
-| **AI Obstacle Avoidance** | Depth camera + YOLOv8 phát hiện người/vật cản → Nav2 tránh tự động |
+| OS | Windows 11 + WSL2 + Ubuntu 22.04 |
+| Middleware | ROS 2 Humble |
+| Simulator | Gazebo Classic 11 (v11.10.2) — dùng `gazebo`, KHÔNG dùng `gz sim` |
+| Navigation | Nav2 (simulation only — không dùng trên Pi 3) |
+| Localization | robot_localization (EKF) |
+| AI / Vision | YOLOv8 (Ultralytics) + OpenCV + PyTorch |
 
-## Tech Stack
+## Tech Stack — Real Hardware
 
-| Layer | Công nghệ | Vai trò |
-|---|---|---|
-| OS (host) | **Windows 11** | Máy tính phát triển |
-| OS (dev) | **WSL2 + Ubuntu 22.04** | Môi trường Linux chạy bên trong Windows |
-| Middleware | **ROS 2 Humble** (LTS đến 2027) | Kết nối tất cả modules |
-| Simulator | **Gazebo Classic 11** (v11.10.2) | Vật lý, sensor simulation |
-| Navigation | **Nav2** | Path planning, return-to-home |
-| Localization | **robot_localization** (EKF) | Fuse GPS + IMU → vị trí chính xác |
-| AI / Vision | **YOLOv8** (Ultralytics) + **OpenCV** | Object detection từ camera |
-| AI Backend | **PyTorch** 2.x | Runtime cho YOLOv8 |
-| Visualization | **RViz2** | Debug robot, path, sensor data |
-| Code Editor | **VS Code** + Remote WSL extension | Viết code từ Windows, chạy trong WSL2 |
-| Language | **Python** 3.10+ | ROS 2 nodes (ưu tiên Python trước C++) |
-
-> **Tại sao WSL2 thay vì ROS 2 native Windows?**
-> ROS 2 có bản native Windows nhưng thiếu nhiều package, Gazebo không chạy tốt.
-> WSL2 cho môi trường Linux đầy đủ bên trong Windows — tất cả tutorial và package đều hoạt động bình thường.
-
-> **Gazebo Classic 11 vs Harmonic:** ROS 2 Humble trên Ubuntu 22.04 cài kèm Gazebo Classic 11 (không phải Harmonic).
-> Dùng lệnh `gazebo` (không phải `gz sim`). Plugins dùng prefix `libgazebo_ros_*`.
-
-## Sensors (Planned)
-
-| Sensor | Model tham khảo | Dùng cho |
-|---|---|---|
-| Depth Camera | Intel RealSense D435 / ZED 2 | Object detection + distance |
-| GPS/RTK-GPS | Ublox F9P (RTK) | Outdoor navigation, return-to-home |
-| IMU | Built-in hoặc MPU-6050 | EKF fusion với GPS |
+| Layer | Công nghệ |
+|---|---|
+| Robot computer | Raspberry Pi 3 (Ubuntu 22.04 Server 64-bit, 1GB RAM) |
+| Middleware | ROS 2 Humble |
+| Motors | 2 motor skid-steer (L298N H-bridge), 4 bánh |
+| RC | 2.4GHz 10ch receiver (protocol: iBUS / SBUS / PPM — TBD) |
+| GPS | u-blox module, UART |
+| IMU | MPU6050 / 9250 |
+| Connectivity | 5G + Cloudflare Tunnel (giải quyết CGNAT) |
+| Navigation | Custom pure-pursuit GPS navigator (thay Nav2 — quá nặng cho Pi 3 1GB) |
+| App | Flutter Android (OpenStreetMap, MQTT) |
+| MQTT broker | Mosquitto self-hosted trên Pi |
 
 ## File Structure
 
@@ -48,29 +36,84 @@ ROS 2 + Gazebo trước khi build prototype phần cứng thực tế.
 Agri_Robot_Simulation/
 ├── CLAUDE.md
 ├── .claude/
-│   └── rules/              ← Tất cả quy tắc dự án
-├── agri_robot/             ← ROS 2 package chính
-│   ├── urdf/               ← Robot model (URDF/Xacro)
-│   ├── config/             ← Nav2, EKF, controller params
-│   ├── launch/             ← Launch files
-│   ├── worlds/             ← Gazebo world files (.sdf)
-│   └── scripts/            ← Python ROS 2 nodes
-│       ├── navigation/     ← Waypoint nav, return-to-home
-│       ├── ai_vision/      ← YOLOv8 obstacle detection
-│       └── motor_control/  ← 4WD driver node
-└── docs/                   ← Tài liệu, diagrams
+│   ├── memory.md              ← Trạng thái thực tế, lỗi đã gặp — đọc mỗi session
+│   └── rules/
+├── agri_robot/                ← Simulation package (Gazebo + Nav2)
+│   ├── urdf/
+│   ├── config/
+│   ├── launch/
+│   ├── worlds/
+│   └── agri_robot/
+│       ├── navigation/        ← return_home.py
+│       └── ai_vision/         ← yolo_obstacle_node.py
+├── agri_robot_hardware/       ← Pi hardware drivers
+│   ├── agri_robot_hardware/
+│   │   ├── rc_interface_node.py
+│   │   ├── motor_driver_node.py
+│   │   └── drivers/
+│   │       ├── rc_protocol.py    ← iBUS/SBUS/PPM/Mock
+│   │       └── pwm_motor.py      ← L298N/Mock
+│   ├── config/
+│   │   └── hardware_params.yaml  ← GPIO pins, RC channels (set mock → l298n/ibus on Pi)
+│   └── launch/
+│       └── hardware.launch.py
+├── agri_robot_control/        ← Navigation + app bridge
+│   ├── agri_robot_control/
+│   │   ├── mode_manager_node.py       ← MANUAL/AUTO/FOLLOW/ESTOP state machine
+│   │   ├── boundary_manager_node.py   ← GPS polygon, enforcement
+│   │   ├── coverage_planner_node.py   ← Boustrophedon lawnmower path
+│   │   ├── gps_navigator_node.py      ← Pure-pursuit GPS waypoint follower
+│   │   ├── follow_mode_node.py        ← Phone-GPS follow mode
+│   │   ├── mqtt_bridge_node.py        ← MQTT ↔ ROS 2 bidirectional bridge
+│   │   └── stuck_detector_node.py     ← Two-layer stuck detection
+│   ├── config/
+│   │   ├── control_params.yaml
+│   │   ├── ekf_local.yaml    ← Copy từ sim, use_sim_time removed
+│   │   ├── ekf_global.yaml
+│   │   ├── navsat.yaml       ← Update datum_lat/lon cho field thực tế
+│   │   ├── twist_mux.yaml    ← /cmd_vel_teleop(p20) + /cmd_vel_auto(p5)
+│   │   └── mqtt_config.yaml
+│   └── launch/
+│       ├── localization.launch.py
+│       ├── navigation.launch.py
+│       └── full_system.launch.py   ← Single command bringup
+└── agri_robot_app/            ← Flutter Android app (Phase C — chưa tạo)
 ```
 
-## Môi trường hoạt động
+## MQTT Topics
 
-- **Ngoài trời — đồng ruộng:** Địa hình gồ ghề, GPS-based navigation
-- **Không cần SLAM** (không map trong nhà) — dùng GPS + IMU fusion là đủ
-- **Tốc độ di chuyển:** 0.5–2.0 m/s (field robot, không cần nhanh)
+| Topic | Hướng | Nội dung | QoS |
+|---|---|---|---|
+| `robot/position` | Pi → App | `{lat, lon, heading_deg, mode}` | 0 |
+| `robot/status`   | Pi → App | `{mode, gps_fix, stuck, boundary, ...}` | 1 |
+| `robot/path`     | Pi → App | `[{lat,lon}, ...]` coverage waypoints | 0 |
+| `app/command`    | App → Pi | `{type: "mode_set\|goto", mode: "..."}` | 1 |
+| `app/estop`      | App → Pi | `{}` — immediate | 2 |
+| `app/boundary`   | App → Pi | `[{lat,lon}, ...]` polygon | 1 |
+| `app/follow_position` | App → Pi | `{lat, lon}` phone GPS, 5 Hz | 0 |
+| `app/coverage_config` | App → Pi | `{row_offset, speed}` | 1 |
+
+## Critical Notes
+
+1. **ESTOP guardian** tại `motor_driver_node` — không phải twist_mux. GPIO bị brake trực tiếp.
+2. **Pi 3 RAM**: 600MB budget. KHÔNG chạy Nav2. 5 Python processes ~80MB + robot_localization ~50MB + OS ~200MB.
+3. **`/dev/serial0` bị Bluetooth** chiếm trên Pi 3: phải `dtoverlay=disable-bt` trong `/boot/config.txt`.
+4. **5G CGNAT**: App không kết nối trực tiếp được. Dùng Cloudflare Tunnel qua `cloudflared`.
+5. **GPS datum**: Cập nhật `navsat.yaml` datum_lat/lon cho field thực tế trước khi deploy.
+6. **Heading**: Dùng EKF yaw từ `/odometry/global`, KHÔNG dùng GPS track direction (không tin cậy < 0.2 m/s).
+7. **hardware_params.yaml**: Mặc định `mock` — đổi thành `l298n`/`ibus` khi deploy lên Pi.
+
+## Gazebo Classic Notes
+
+- Dùng `gazebo` (không phải `gz sim`) — Gazebo Classic 11, KHÔNG phải Harmonic
+- Plugins dùng prefix `libgazebo_ros_*`
+- `ros2 --version` không tồn tại — dùng `echo $ROS_DISTRO`
+- Không thể start Gazebo từ Bash tool (cần DISPLAY) — phải start thủ công từ WSL2 terminal
 
 ## Out of Scope (v1)
 
-- Tích hợp phần cứng thực tế (chỉ mô phỏng)
 - Multi-robot coordination
-- Camera thermal/NIR (chỉ RGB-D)
-- Arm/manipulator (chỉ di chuyển)
-- Cloud connectivity / remote control qua internet
+- Camera thermal/NIR
+- Arm/manipulator
+- SLAM (dùng GPS outdoor)
+- Nav2 trên Pi 3 (quá nặng — dùng custom pure-pursuit)

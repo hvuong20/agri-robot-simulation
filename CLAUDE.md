@@ -1,6 +1,8 @@
-# Agri Robot Simulation — Project Guide
+# Agri Robot — Project Guide
 
-Hệ thống mô phỏng robot nông nghiệp skid-steer tự hành (4 bánh, 2 motor). Rules được tổ chức trong `.claude/rules/`.
+Hệ thống robot nông nghiệp skid-steer tự hành (4 bánh, 2 motor). Gồm 2 phần:
+- **Simulation** (Gazebo + ROS 2 + Nav2) — Phases 0–4, chạy trên WSL2
+- **Real Hardware + App** (Raspberry Pi 3 + Flutter Android) — Phases A–F, đang triển khai
 
 ## Memory & Context
 
@@ -22,11 +24,33 @@ Hệ thống mô phỏng robot nông nghiệp skid-steer tự hành (4 bánh, 2 
 
 ## Trạng thái nhanh (cập nhật 2026-04-30)
 
-| Phase | Status |
-|---|---|
-| 0 — Môi trường | ✅ Xong |
-| 1 — URDF + Gazebo | ✅ Xong |
-| 2 — Localization | ✅ Xong |
-| 3 — Nav2 + Return-Home | ✅ Xong — `Successfully returned home!` |
-| 4 — AI Obstacle Avoidance | 🔧 Code xong — depth camera + yolo node + nav2 layer. Cần test thực tế |
-| 5 — Farm World + Testing | ⬜ Chưa bắt đầu |
+### Simulation (WSL2 + Gazebo)
+
+| Phase | Nội dung | Status |
+|---|---|---|
+| 0 — Môi trường | WSL2 + ROS 2 Humble + Gazebo Classic 11 | ✅ Xong |
+| 1 — URDF + Gazebo | Robot 4 bánh, teleop, sensors | ✅ Xong |
+| 2 — Localization | Dual EKF + navsat_transform | ✅ Xong |
+| 3 — Nav2 + Return-Home | `Successfully returned home!` | ✅ Xong |
+| 4 — AI Obstacle Avoidance | Depth cam + YOLO node + Nav2 layer — code xong | 🔧 Cần test |
+| 5 — Farm World + Testing | Chưa bắt đầu | ⬜ |
+
+### Real Hardware + App (Raspberry Pi 3 + Flutter)
+
+| Phase | Nội dung | Status |
+|---|---|---|
+| A — Hardware Drivers | RC interface + motor PWM + ESTOP guardian | ✅ Xong |
+| B — Localization | EKF configs cho phần cứng (không sim_time) | ✅ Xong |
+| C — Mode Manager + MQTT + App MVP | Flutter map + ESTOP button | ⬜ Tiếp theo |
+| D — Boundary + Coverage | Boundary polygon + lawnmower | ⬜ |
+| E — Follow Mode + Stuck Detection | GPS follow + stuck alert | ⬜ |
+| F — Integration + Polish | Cloudflare Tunnel + full test | ⬜ |
+
+## Packages
+
+| Package | Đường dẫn | Mục đích |
+|---|---|---|
+| `agri_robot` | `agri_robot/` | Simulation (Gazebo, Nav2) |
+| `agri_robot_hardware` | `agri_robot_hardware/` | Pi GPIO: RC, PWM motor, ESTOP |
+| `agri_robot_control` | `agri_robot_control/` | Navigation, MQTT, mode manager |
+| Flutter app | `agri_robot_app/` | Android app (Phase C — chưa tạo) |
