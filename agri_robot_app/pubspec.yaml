@@ -1,0 +1,40 @@
+name: agri_robot_app
+description: Agricultural robot control app — OSM map, MQTT, boundary editor, follow mode.
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.0.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Map (free OpenStreetMap tiles — no API key needed)
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.0
+
+  # MQTT over WiFi / 5G
+  mqtt_client: ^10.0.0
+
+  # Phone GPS (for follow mode)
+  geolocator: ^11.0.0
+
+  # State management
+  provider: ^6.1.0
+
+  # Permissions (GPS, notifications)
+  permission_handler: ^11.0.0
+
+  # Local storage (save broker address, settings)
+  shared_preferences: ^2.2.0
+
+  # UI
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
