@@ -11,16 +11,21 @@ import '../models/robot_state.dart';
 const _kTopicPosition     = 'robot/position';
 const _kTopicStatus       = 'robot/status';
 const _kTopicPath         = 'robot/path';
+const _kTopicAlert        = 'robot/alert';
 const _kTopicAppCommand   = 'app/command';
 const _kTopicAppEstop     = 'app/estop';
 const _kTopicAppBoundary  = 'app/boundary';
 const _kTopicFollowPos    = 'app/follow_position';
 const _kTopicCovConfig    = 'app/coverage_config';
 
+/// Called when robot/alert arrives (e.g. stuck confirmed).
+typedef AlertCallback = void Function(String alertType);
+
 class MqttService extends ChangeNotifier {
   MqttServerClient? _client;
   bool _connected = false;
   Timer? _reconnectTimer;
+  AlertCallback? onAlert;
 
   String brokerHost;
   int    brokerPort;
@@ -81,6 +86,7 @@ class MqttService extends ChangeNotifier {
     _subscribe(_kTopicPosition,  MqttQos.atMostOnce);
     _subscribe(_kTopicStatus,    MqttQos.atLeastOnce);
     _subscribe(_kTopicPath,      MqttQos.atMostOnce);
+    _subscribe(_kTopicAlert,     MqttQos.atLeastOnce);
 
     _client!.updates!.listen(_onMessage);
   }
@@ -121,6 +127,9 @@ class MqttService extends ChangeNotifier {
           robotState.updateFromStatus(data);
         } else if (topic == _kTopicPath && data is List) {
           robotState.updateCoveragePath(data);
+        } else if (topic == _kTopicAlert && data is Map<String, dynamic>) {
+          final alertType = data['type'] as String? ?? 'unknown';
+          onAlert?.call(alertType);
         }
       } catch (e) {
         debugPrint('MQTT parse error [$topic]: $e');

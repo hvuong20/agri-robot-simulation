@@ -43,6 +43,15 @@ class RobotState extends ChangeNotifier {
   bool boundaryViolation = false;
   double distToEdge      = 0.0;
 
+  // Stuck detection
+  bool   stuckConfirmed = false;
+  double stuckMismatchS = 0.0;
+
+  // Follow mode
+  bool   followActive    = false;
+  double followDistM     = 0.0;
+  double followHeadingErr = 0.0;
+
   // Coverage path (for map overlay)
   List<LatLng> coveragePath = [];
 
@@ -80,6 +89,19 @@ class RobotState extends ChangeNotifier {
       navWaypointIdx  = nav['waypoint_idx']  as int?  ?? 0;
       navTotal        = nav['total']         as int?  ?? 0;
       navDistToNext   = (nav['dist_to_next'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    final stk = msg['stuck'] as Map?;
+    if (stk != null) {
+      stuckConfirmed = stk['stuck']      as bool?  ?? false;
+      stuckMismatchS = (stk['mismatch_s'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    final flw = msg['follow'] as Map?;
+    if (flw != null) {
+      followActive     = flw['active']          as bool?  ?? false;
+      followDistM      = (flw['dist_to_target'] as num?)?.toDouble() ?? 0.0;
+      followHeadingErr = (flw['heading_err_deg'] as num?)?.toDouble() ?? 0.0;
     }
 
     notifyListeners();

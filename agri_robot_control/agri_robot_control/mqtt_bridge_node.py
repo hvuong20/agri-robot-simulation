@@ -18,7 +18,10 @@ ROS 2 → MQTT (10 Hz for position, 1 Hz for status):
   /current_mode       → robot/position   (mode field)
   /boundary_status    → robot/status     (part of status JSON)
   /navigator/status   → robot/status     (part of status JSON)
+  /stuck/status       → robot/status     (part of status JSON)
+  /follow/status      → robot/status     (part of status JSON)
   /coverage_waypoints → robot/path       (full waypoint array)
+  /stuck_alert        → robot/alert      {type: "stuck"} — immediate QoS 1
 
 Parameters:
   mqtt.broker_host   string  'localhost'
@@ -71,12 +74,14 @@ class MQTTBridgeNode(Node):
         status_hz         = self.get_parameter('mqtt.status_hz').value
 
         # Telemetry state
-        self._lat          = 0.0
-        self._lon          = 0.0
-        self._heading_deg  = 0.0
-        self._current_mode = 'MANUAL'
-        self._bnd_status   = {}
-        self._nav_status   = {}
+        self._lat           = 0.0
+        self._lon           = 0.0
+        self._heading_deg   = 0.0
+        self._current_mode  = 'MANUAL'
+        self._bnd_status    = {}
+        self._nav_status    = {}
+        self._stuck_status  = {}
+        self._follow_status = {}
 
         # MQTT client
         self._mqtt = None
@@ -92,6 +97,9 @@ class MQTTBridgeNode(Node):
         self.create_subscription(String,    '/current_mode',      self._mode_cb,   10)
         self.create_subscription(String,    '/boundary_status',   self._bnd_cb,    10)
         self.create_subscription(String,    '/navigator/status',  self._nav_cb,    10)
+        self.create_subscription(String,    '/stuck/status',      self._stuck_cb,  10)
+        self.create_subscription(String,    '/follow/status',     self._follow_cb, 10)
+        self.create_subscription(Empty,     '/stuck_alert',       self._stuck_alert_cb, 1)
         self.create_subscription(String,    '/coverage_waypoints', self._path_cb,  10)
 
         # ROS publishers (MQTT → ROS)
@@ -202,6 +210,27 @@ class MQTTBridgeNode(Node):
         except json.JSONDecodeError:
             pass
 
+    def _stuck_cb(self, msg: String):
+        try:
+            self._stuck_status = json.loads(msg.data)
+        except json.JSONDecodeError:
+            pass
+
+    def _follow_cb(self, msg: String):
+        try:
+            self._follow_status = json.loads(msg.data)
+        except json.JSONDecodeError:
+            pass
+
+    def _stuck_alert_cb(self, _msg: Empty):
+        # Immediate push notification — QoS 1 so app receives it reliably
+        self._mqtt_publish(
+            'robot/alert',
+            json.dumps({'type': 'stuck', 'ts': time.time()}),
+            qos=1,
+        )
+        self.get_logger().warn('Stuck alert forwarded to MQTT robot/alert')
+
     def _path_cb(self, msg: String):
         self._mqtt_publish('robot/path', msg.data, qos=0)
 
@@ -229,6 +258,8 @@ class MQTTBridgeNode(Node):
             'gps_fix':     self._lat != 0.0,
             'boundary':    self._bnd_status,
             'navigation':  self._nav_status,
+            'stuck':       self._stuck_status,
+            'follow':      self._follow_status,
             'mqtt_ok':     self._mqtt_connected,
         }
         self._mqtt_publish('robot/status', json.dumps(data), qos=1)
