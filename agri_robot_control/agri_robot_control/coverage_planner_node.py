@@ -6,12 +6,15 @@ Accepts a GPS polygon boundary and generates a back-and-forth sweep path
 aligned to the longest axis of the bounding rectangle.
 
 Subscriptions:
-  /boundary_polygon   (std_msgs/String)  JSON [{lat,lon},...] polygon
-  /app/coverage_config (std_msgs/String) JSON {row_offset, speed} from app
+  /boundary_polygon    (std_msgs/String)  JSON [{lat,lon},...] polygon
+  /app/coverage_config (std_msgs/String)  JSON {row_offset, speed} from app
+  /current_mode        (std_msgs/String)  "MANUAL"|"AUTO"|"FOLLOW"|"ESTOP"
 
 Publications:
-  /coverage_waypoints (std_msgs/String)  JSON [{lat,lon},...] ordered waypoints
-  /coverage_ready     (std_msgs/Bool)    true when a valid path is available
+  /coverage_waypoints  (std_msgs/String)  JSON [{lat,lon},...] ordered waypoints
+  /coverage_ready      (std_msgs/Bool)    true when a valid path is available
+  /waypoints_goal      (std_msgs/String)  same payload, sent to gps_navigator
+                                          on plan update or when mode→AUTO
 
 Parameters:
   coverage.row_offset_m  float  3.0   sweep row spacing in metres (≥2.0 for GPS)
@@ -125,12 +128,15 @@ class CoveragePlannerNode(Node):
 
         self._polygon: list = []
         self._waypoints: list = []
+        self._current_mode = 'MANUAL'
 
-        self.create_subscription(String, '/boundary_polygon',   self._boundary_cb,    10)
-        self.create_subscription(String, '/app/coverage_config', self._config_cb,     10)
+        self.create_subscription(String, '/boundary_polygon',    self._boundary_cb, 10)
+        self.create_subscription(String, '/app/coverage_config', self._config_cb,   10)
+        self.create_subscription(String, '/current_mode',        self._mode_cb,     10)
 
         self._pub_wp    = self.create_publisher(String, '/coverage_waypoints', 10)
         self._pub_ready = self.create_publisher(Bool,   '/coverage_ready',     10)
+        self._pub_goal  = self.create_publisher(String, '/waypoints_goal',     10)
 
         self.get_logger().info('coverage_planner_node ready')
 
@@ -154,21 +160,33 @@ class CoveragePlannerNode(Node):
         except (json.JSONDecodeError, ValueError, KeyError):
             pass
 
+    def _mode_cb(self, msg: String):
+        prev = self._current_mode
+        self._current_mode = msg.data
+        # Resend waypoints to gps_navigator when switching to AUTO
+        if prev != 'AUTO' and self._current_mode == 'AUTO' and self._waypoints:
+            self._pub_goal.publish(self._make_str(self._waypoints))
+            self.get_logger().info(
+                f'Mode→AUTO: sent {len(self._waypoints)} waypoints to /waypoints_goal'
+            )
+
+    def _make_str(self, data) -> String:
+        msg = String()
+        msg.data = json.dumps(data)
+        return msg
+
     def _plan(self):
         wps = _boustrophedon(self._polygon, self._row_offset, self._margin)
         self._waypoints = wps
 
-        wp_msg = String()
-        wp_msg.data = json.dumps(wps)
-        self._pub_wp.publish(wp_msg)
-
-        ready_msg = Bool()
-        ready_msg.data = len(wps) > 0
-        self._pub_ready.publish(ready_msg)
+        self._pub_wp.publish(self._make_str(wps))
+        self._pub_ready.publish(Bool(data=len(wps) > 0))
+        # Forward to gps_navigator immediately (it guards on /current_mode internally)
+        if wps:
+            self._pub_goal.publish(self._make_str(wps))
 
         self.get_logger().info(
-            f'Coverage plan: {len(wps)} waypoints, '
-            f'row_offset={self._row_offset}m'
+            f'Coverage plan: {len(wps)} waypoints, row_offset={self._row_offset}m'
         )
 
 
