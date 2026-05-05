@@ -4,6 +4,20 @@ Hệ thống robot nông nghiệp skid-steer tự hành (4 bánh, 2 motor). Gồ
 - **Simulation** (Gazebo + ROS 2 + Nav2) — Phases 0–4, chạy trên WSL2
 - **Real Hardware + App** (Raspberry Pi 3 + Flutter Android) — Phases A–F, đang triển khai
 
+## Quy tắc bắt buộc
+
+### Rule 1: Screenshot sau mỗi thay đổi lớn — Bắt buộc
+
+Sau mỗi thay đổi lớn về UI (Flutter app), **phải**:
+1. Chạy `flutter run` hoặc build APK
+2. Chụp screenshot màn hình thực tế
+3. So sánh với design gốc / màn hình trước thay đổi
+4. Confirm không có regression trước khi commit
+
+Áp dụng cho: mọi thay đổi file `*.dart` ảnh hưởng đến layout, màu sắc, widget mới.
+
+---
+
 ## Memory & Context
 
 | File | Nội dung | Load |
