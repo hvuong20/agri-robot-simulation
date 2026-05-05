@@ -22,6 +22,7 @@ ROS 2 → MQTT (10 Hz for position, 1 Hz for status):
   /follow/status      → robot/status     (part of status JSON)
   /coverage_waypoints → robot/path       (full waypoint array)
   /stuck_alert        → robot/alert      {type: "stuck"} — immediate QoS 1
+  /battery/status     → robot/status     (part of status JSON, 0.2 Hz)
 
 Parameters:
   mqtt.broker_host   string  'localhost'
@@ -78,10 +79,11 @@ class MQTTBridgeNode(Node):
         self._lon           = 0.0
         self._heading_deg   = 0.0
         self._current_mode  = 'MANUAL'
-        self._bnd_status    = {}
-        self._nav_status    = {}
-        self._stuck_status  = {}
-        self._follow_status = {}
+        self._bnd_status     = {}
+        self._nav_status     = {}
+        self._stuck_status   = {}
+        self._follow_status  = {}
+        self._battery_status = {}
 
         # MQTT client
         self._mqtt = None
@@ -100,7 +102,8 @@ class MQTTBridgeNode(Node):
         self.create_subscription(String,    '/stuck/status',      self._stuck_cb,  10)
         self.create_subscription(String,    '/follow/status',     self._follow_cb, 10)
         self.create_subscription(Empty,     '/stuck_alert',       self._stuck_alert_cb, 1)
-        self.create_subscription(String,    '/coverage_waypoints', self._path_cb,  10)
+        self.create_subscription(String,    '/coverage_waypoints', self._path_cb,    10)
+        self.create_subscription(String,    '/battery/status',     self._battery_cb, 10)
 
         # ROS publishers (MQTT → ROS)
         self._pub_cmd    = self.create_publisher(String, '/app/command',         10)
@@ -231,6 +234,12 @@ class MQTTBridgeNode(Node):
         )
         self.get_logger().warn('Stuck alert forwarded to MQTT robot/alert')
 
+    def _battery_cb(self, msg: String):
+        try:
+            self._battery_status = json.loads(msg.data)
+        except json.JSONDecodeError:
+            pass
+
     def _path_cb(self, msg: String):
         self._mqtt_publish('robot/path', msg.data, qos=0)
 
@@ -260,6 +269,7 @@ class MQTTBridgeNode(Node):
             'navigation':  self._nav_status,
             'stuck':       self._stuck_status,
             'follow':      self._follow_status,
+            'battery':     self._battery_status,
             'mqtt_ok':     self._mqtt_connected,
         }
         self._mqtt_publish('robot/status', json.dumps(data), qos=1)

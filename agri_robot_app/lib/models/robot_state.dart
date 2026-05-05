@@ -52,6 +52,12 @@ class RobotState extends ChangeNotifier {
   double followDistM     = 0.0;
   double followHeadingErr = 0.0;
 
+  // Battery
+  double batteryVoltage  = 0.0;
+  double batteryPercent  = 100.0;
+  bool   batteryLow      = false;
+  bool   batteryCritical = false;
+
   // Coverage path (for map overlay)
   List<LatLng> coveragePath = [];
 
@@ -102,6 +108,14 @@ class RobotState extends ChangeNotifier {
       followActive     = flw['active']          as bool?  ?? false;
       followDistM      = (flw['dist_to_target'] as num?)?.toDouble() ?? 0.0;
       followHeadingErr = (flw['heading_err_deg'] as num?)?.toDouble() ?? 0.0;
+    }
+
+    final bat = msg['battery'] as Map?;
+    if (bat != null) {
+      batteryVoltage  = (bat['voltage'] as num?)?.toDouble() ?? batteryVoltage;
+      batteryPercent  = (bat['percent'] as num?)?.toDouble() ?? batteryPercent;
+      batteryLow      = bat['low']      as bool? ?? batteryLow;
+      batteryCritical = bat['critical'] as bool? ?? batteryCritical;
     }
 
     notifyListeners();

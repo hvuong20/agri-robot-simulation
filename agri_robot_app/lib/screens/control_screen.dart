@@ -6,6 +6,7 @@ import '../services/location_service.dart';
 import '../services/mqtt_service.dart';
 import '../widgets/emergency_stop_btn.dart';
 import '../widgets/mode_selector.dart';
+import 'settings_screen.dart';
 
 class ControlScreen extends StatefulWidget {
   const ControlScreen({super.key});
@@ -30,8 +31,16 @@ class _ControlScreenState extends State<ControlScreen> {
         title: const Text('Control Panel'),
         actions: [
           Padding(
-            padding: const EdgeInsets.only(right: 12),
+            padding: const EdgeInsets.only(right: 4),
             child: _MqttDot(connected: robotState.mqttConnected),
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: 'Settings',
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            ),
           ),
         ],
       ),
@@ -263,6 +272,26 @@ class _StatusRow extends StatelessWidget {
           const _Chip(label: 'Boundary violation!', icon: Icons.dangerous, ok: false),
         if (robotState.stuckConfirmed)
           const _Chip(label: 'Robot STUCK', icon: Icons.block, ok: false),
+        if (robotState.batteryVoltage > 0) ...[
+          if (robotState.batteryCritical)
+            _Chip(
+              label: 'Battery ${robotState.batteryPercent.toStringAsFixed(0)}%!',
+              icon: Icons.battery_alert,
+              ok: false,
+            )
+          else if (robotState.batteryLow)
+            _Chip(
+              label: 'Low ${robotState.batteryPercent.toStringAsFixed(0)}%',
+              icon: Icons.battery_2_bar,
+              ok: false,
+            )
+          else
+            _Chip(
+              label: 'Battery ${robotState.batteryPercent.toStringAsFixed(0)}%',
+              icon: Icons.battery_full,
+              ok: true,
+            ),
+        ],
       ],
     );
   }

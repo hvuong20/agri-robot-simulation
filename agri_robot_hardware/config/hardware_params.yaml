@@ -68,3 +68,15 @@
 
       # Status topic publish rate
       status_rate_hz: 5.0
+
+    # ── Battery Monitor ──────────────────────────────────────────────────────
+    battery:
+      # Driver: 'ads1115' | 'mock'
+      # ads1115: reads voltage via ADS1115 I2C ADC + voltage divider (see node header)
+      # Requires: pip3 install adafruit-circuitpython-ads1x15
+      driver: mock
+
+      cell_count:       3     # 3S LiPo: 12.6 V full, ~10.5 V safe cutoff
+      warn_percent:     20.0  # yellow warning at 20%
+      critical_percent: 10.0  # red alert + log error at 10%
+      publish_hz:       0.2   # publish every 5 s (battery changes slowly)

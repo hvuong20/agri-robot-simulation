@@ -26,8 +26,9 @@ setup(
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
-            'rc_interface_node = agri_robot_hardware.rc_interface_node:main',
-            'motor_driver_node = agri_robot_hardware.motor_driver_node:main',
+            'rc_interface_node     = agri_robot_hardware.rc_interface_node:main',
+            'motor_driver_node     = agri_robot_hardware.motor_driver_node:main',
+            'battery_monitor_node  = agri_robot_hardware.battery_monitor_node:main',
         ],
     },
 )
