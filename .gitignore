@@ -1,0 +1,43 @@
+# ROS 2 build artifacts
+build/
+install/
+log/
+*.pyc
+__pycache__/
+*.egg-info/
+.colcon_install_layout
+
+# Flutter / Dart
+agri_robot_app/build/
+agri_robot_app/.dart_tool/
+agri_robot_app/.flutter-plugins
+agri_robot_app/.flutter-plugins-dependencies
+agri_robot_app/pubspec.lock
+agri_robot_app/android/.gradle/
+agri_robot_app/android/local.properties
+agri_robot_app/android/app/debug/
+agri_robot_app/android/app/release/
+agri_robot_app/android/app/profile/
+agri_robot_app/android/key.properties
+*.apk
+*.aab
+
+# YOLOv8 model weights
+*.pt
+*.onnx
+
+# Python
+*.pyo
+.env
+venv/
+.venv/
+
+# Editor
+.vscode/
+.idea/
+*.swp
+*~
+
+# OS
+.DS_Store
+Thumbs.db
