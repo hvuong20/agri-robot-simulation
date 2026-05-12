@@ -4,7 +4,7 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 
 ---
 
-## Trạng thái Phase (cập nhật 2026-04-30)
+## Trạng thái Phase (cập nhật 2026-05-06)
 
 ### Simulation (WSL2 + Gazebo)
 
@@ -21,12 +21,22 @@ Ghi lại trạng thái thực tế, các lỗi đã gặp và cách fix, dùng 
 
 | Phase | Nội dung | Trạng thái |
 |---|---|---|
-| A | Hardware Drivers (RC + Motor PWM + ESTOP guardian) | ✅ Hoàn thành |
+| A | Hardware Drivers (RC + Motor PWM + ESTOP guardian + Battery) | ✅ Hoàn thành |
 | B | Localization configs cho real hardware (EKF, navsat, no sim_time) | ✅ Hoàn thành |
-| C | Mode Manager + MQTT Bridge + Flutter App MVP | ⬜ Tiếp theo |
-| D | Boundary Manager + Coverage Planner | ⬜ |
-| E | Follow Mode + Stuck Detector | ⬜ |
-| F | Integration + Cloudflare Tunnel + Polish | ⬜ |
+| C | Mode Manager + MQTT Bridge + Flutter App MVP | ✅ Hoàn thành |
+| D | Boundary Manager + Coverage Planner + App Boundary Editor | ✅ Hoàn thành |
+| E | Follow Mode + Stuck Detector + App Follow UI | ✅ Hoàn thành |
+| F | Battery Monitor + Cloudflare Tunnel + APK Build | ✅ Code xong — cần Pi 3 |
+
+### Flutter & Build Environment (Windows)
+
+| Item | Trạng thái | Chi tiết |
+|---|---|---|
+| Flutter SDK | ✅ | `C:\flutter\flutter` v3.38.9, PATH permanent |
+| Android SDK | ✅ | `C:\Android\android-sdk`, android-36, build-tools 35.0.0 |
+| Java 17 | ✅ | `C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot` |
+| APK | ✅ 48.3 MB | `agri_robot_app\build\app\outputs\flutter-apk\app-release.apk` |
+| GitHub | ✅ | https://github.com/hvuong20/agri-robot-simulation (public) |
 
 ---
 
@@ -416,8 +426,48 @@ mode_manager_node publishes /current_mode → gps_navigator, follow_mode, bounda
 ```
 
 **Deploy lên Pi:**
-1. Sửa `hardware_params.yaml`: đổi `protocol: ibus` (hoặc sbus/ppm), `driver: l298n`
+1. Sửa `hardware_params.yaml`: đổi `protocol: ibus` (hoặc sbus/ppm), `driver: l298n`, `battery.driver: ads1115`
 2. Sửa `navsat.yaml`: cập nhật `datum_lat`, `datum_lon` cho field thực tế
 3. Disable Bluetooth: thêm `dtoverlay=disable-bt` vào `/boot/config.txt`, reboot
-4. Cài dependencies Pi: `pip3 install RPi.GPIO pyserial paho-mqtt`
+4. Cài dependencies Pi: `pip3 install RPi.GPIO pyserial paho-mqtt adafruit-circuitpython-ads1x15`
 5. `ros2 launch agri_robot_control full_system.launch.py protocol:=ibus motor_driver:=l298n`
+
+---
+
+## Quyết định kỹ thuật đã chốt
+
+### RC Transmitter
+- **FlySky FS-i6** (6 kênh) đủ dùng — CH1–CH6 hoạt động
+- CH7 (boundary waypoint button RC) không có → dùng boundary editor trên app thay thế
+- Cần receiver **FS-iA6B** (có iBUS), không phải FS-iA6 (PPM only)
+
+### Motor nâng cấp (payload 180 kg)
+- Tổng tải: ~240 kg (180 kg hàng + 60 kg khung)
+- **Motor**: 2x DC 48V 500W gear motor (~56 Nm/motor với safety factor)
+- **Driver**: Cytron MD60C 60A (interface PWM+DIR giống L298N, ít thay đổi code)
+- **Pin**: LiFePO4 48V 20Ah + BMS 48V 30A (an toàn hơn LiPo cho robot nặng)
+- **Battery config**: đổi `cell_count: 16`, `FULL_CELL_V: 3.65`, `EMPTY_CELL_V: 3.0`
+- **Code cần thêm**: `CytronMD60CDriver` trong `pwm_motor.py` (~30 dòng, interface tương tự L298N)
+- L298N **không dùng được** với motor lớn (max 2A, 3A peak)
+
+### Simulation Bridge (Gazebo ↔ Control nodes)
+- `simulation_bridge.launch.py`: 7 control nodes với `use_sim_time: True`
+- Key remapping: `/cmd_vel_auto` → `/cmd_vel` để feed vào Gazebo twist_mux (priority 1)
+- Gazebo datum: 10.45°N, 105.63°E
+
+### Flutter stamp fix
+- `C:\flutter\flutter\bin\cache\flutter_tools.stamp` phải chứa git HEAD + `:`
+- Nếu flutter bootstrap fail "Building flutter tool... The system cannot find path": cập nhật stamp
+  ```powershell
+  $h = cmd /c "pushd C:\flutter\flutter & git rev-parse HEAD"; Set-Content "C:\flutter\flutter\bin\cache\flutter_tools.stamp" "`"$($h.Trim()):`""
+  ```
+
+### Build APK (Windows)
+```powershell
+$env:JAVA_HOME="C:\Program Files\Eclipse Adoptium\jdk-17.0.17.10-hotspot"
+$env:ANDROID_HOME="C:\Android\android-sdk"
+$env:Path="C:\flutter\flutter\bin;$env:JAVA_HOME\bin;" + $env:Path
+cd C:\Claude_project\Agri_Robot_Simulation\agri_robot_app
+flutter build apk --release
+# Output: build\app\outputs\flutter-apk\app-release.apk
+```
